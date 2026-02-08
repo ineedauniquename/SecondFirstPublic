@@ -254,24 +254,22 @@ class MainActivity : Activity() {
                     val p1 = pixels1[x]
                     val p2 = pixels2[x]
 
-                    // Extract ARGB channels (each 8-bit: 0-255)
-                    val a1 = (p1 shr 24) and 0xFF
+                    // Extract RGB channels (each 8-bit: 0-255)
                     val r1 = (p1 shr 16) and 0xFF
                     val g1 = (p1 shr 8) and 0xFF
                     val b1 = p1 and 0xFF
 
-                    val a2 = (p2 shr 24) and 0xFF
                     val r2 = (p2 shr 16) and 0xFF
                     val g2 = (p2 shr 8) and 0xFF
                     val b2 = p2 and 0xFF
 
-                    // Multiply each channel, modulo 256 (8-bit overflow wrap)
-                    val a = (a1 * a2) % 256
+                    // Multiply RGB channels, modulo 256 (8-bit overflow wrap)
+                    // Keep alpha fully opaque (255*255 % 256 = 1, which is nearly transparent)
                     val r = (r1 * r2) % 256
                     val g = (g1 * g2) % 256
                     val b = (b1 * b2) % 256
 
-                    resultPixels[x] = (a shl 24) or (r shl 16) or (g shl 8) or b
+                    resultPixels[x] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
                 }
 
                 result.setPixels(resultPixels, 0, width, 0, y, width, 1)
