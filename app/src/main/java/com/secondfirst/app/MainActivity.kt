@@ -218,6 +218,20 @@ class MainActivity : Activity() {
         rowResult.addView(btnClearResult, rowChildParams(1f))
         layout.addView(rowResult)
 
+        // Brighten / Darken row
+        val rowBrightness = buttonRow()
+        val btnBrighten = styledButton("Brighten +10%").apply {
+            setBackgroundColor(Color.parseColor("#5C5C00"))
+        }
+        btnBrighten.setOnClickListener { adjustBrightness(1.10f) }
+        val btnDarken = styledButton("Darken -10%").apply {
+            setBackgroundColor(Color.parseColor("#3A3A3A"))
+        }
+        btnDarken.setOnClickListener { adjustBrightness(0.90f) }
+        rowBrightness.addView(btnBrighten, rowChildParams(1f))
+        rowBrightness.addView(btnDarken, rowChildParams(1f))
+        layout.addView(rowBrightness)
+
         root.addView(layout)
         frameRoot.addView(root)
 
@@ -329,6 +343,27 @@ class MainActivity : Activity() {
             }
         }
         updateButtons()
+    }
+
+    private fun adjustBrightness(factor: Float) {
+        val bmp = resultBitmap ?: return
+        val w = bmp.width
+        val h = bmp.height
+        val pixels = IntArray(w * h)
+        bmp.getPixels(pixels, 0, w, 0, 0, w, h)
+        for (i in 0 until w * h) {
+            val p = pixels[i]
+            val r = (((p shr 16) and 0xFF) * factor).toInt().coerceIn(0, 255)
+            val g = (((p shr 8) and 0xFF) * factor).toInt().coerceIn(0, 255)
+            val b = ((p and 0xFF) * factor).toInt().coerceIn(0, 255)
+            pixels[i] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+        }
+        val result = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        result.setPixels(pixels, 0, w, 0, 0, w, h)
+        resultBitmap = result
+        previewResult.setImageBitmap(result)
+        val pct = if (factor > 1f) "+${((factor - 1f) * 100).toInt()}%" else "-${((1f - factor) * 100).toInt()}%"
+        statusText.text = "Brightness $pct applied (${w}x${h})"
     }
 
     private fun clearResult() {
