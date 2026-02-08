@@ -38,6 +38,7 @@ class MainActivity : Activity() {
     private lateinit var btnClear2: Button
     private lateinit var btnMultiply: Button
     private lateinit var btnAverage: Button
+    private lateinit var btnClearResult: Button
     private lateinit var btnSave: Button
     private lateinit var statusText: TextView
     private lateinit var progressBar: ProgressBar
@@ -163,12 +164,20 @@ class MainActivity : Activity() {
         previewResult.setOnClickListener { showFullscreen() }
         layout.addView(previewResult)
 
-        // Save button
-        btnSave = styledButton("Save Result to Gallery").apply {
+        // Result buttons row
+        val rowResult = buttonRow()
+        btnSave = styledButton("Save to Gallery").apply {
             isEnabled = false
         }
         btnSave.setOnClickListener { saveResult() }
-        layout.addView(btnSave)
+        btnClearResult = styledButton("Clear").apply {
+            setBackgroundColor(Color.parseColor("#93000A"))
+            isEnabled = false
+        }
+        btnClearResult.setOnClickListener { clearResult() }
+        rowResult.addView(btnSave, rowChildParams(3f))
+        rowResult.addView(btnClearResult, rowChildParams(1f))
+        layout.addView(rowResult)
 
         root.addView(layout)
         frameRoot.addView(root)
@@ -283,11 +292,22 @@ class MainActivity : Activity() {
         updateButtons()
     }
 
+    private fun clearResult() {
+        resultBitmap = null
+        previewResult.setImageBitmap(null)
+        btnSave.isEnabled = false
+        btnClearResult.isEnabled = false
+        updateButtons()
+    }
+
     private fun updateButtons() {
         val has1 = bitmap1 != null
         val has2 = bitmap2 != null
+        val hasResult = resultBitmap != null
         btnMultiply.isEnabled = has1 && has2 && !isProcessing
-        btnAverage.isEnabled = (has1 || has2) && !isProcessing
+        btnAverage.isEnabled = (has1 || has2 || hasResult) && !isProcessing
+        btnSave.isEnabled = hasResult && !isProcessing
+        btnClearResult.isEnabled = hasResult && !isProcessing
         if (has1 && has2) {
             statusText.text = "Ready! Output: ${
                 minOf(bitmap1!!.width, bitmap2!!.width)
@@ -296,6 +316,8 @@ class MainActivity : Activity() {
             statusText.text = "Image 1 loaded. Select Image 2 or use Average."
         } else if (has2) {
             statusText.text = "Image 2 loaded. Select Image 1 or use Average."
+        } else if (hasResult) {
+            statusText.text = "Result available. Average to blur further."
         } else {
             statusText.text = ""
         }
@@ -385,7 +407,11 @@ class MainActivity : Activity() {
         if (isProcessing) return
         val bmp1 = bitmap1
         val bmp2 = bitmap2
-        if (bmp1 == null && bmp2 == null) return
+        val resBmp = resultBitmap
+
+        // If result exists, average just the result (snapshot copy to avoid self-reference)
+        // Otherwise fall back to source images
+        if (resBmp == null && bmp1 == null && bmp2 == null) return
 
         isProcessing = true
         btnMultiply.isEnabled = false
@@ -393,67 +419,83 @@ class MainActivity : Activity() {
         progressBar.visibility = View.VISIBLE
         progressBar.max = 100
         progressBar.progress = 0
-        statusText.text = "Averaging..."
 
-        Thread {
-            if (bmp1 != null && bmp2 != null) {
-                // Two images: average each, then average the two results
-                val w = minOf(bmp1.width, bmp2.width)
-                val h = minOf(bmp1.height, bmp2.height)
-                val s1 = Bitmap.createScaledBitmap(bmp1, w, h, true)
-                val s2 = Bitmap.createScaledBitmap(bmp2, w, h, true)
+        if (resBmp != null) {
+            // Average the result image - copy it first so we read from snapshot, not live result
+            statusText.text = "Re-averaging result..."
+            val snapshot = resBmp.copy(Bitmap.Config.ARGB_8888, false)
 
-                runOnUiThread { progressBar.progress = 20 }
-                val avg1 = toroidalAverage(s1)
-                runOnUiThread { progressBar.progress = 50 }
-                val avg2 = toroidalAverage(s2)
-                runOnUiThread { progressBar.progress = 80 }
-
-                // Average the two averaged images
-                val result = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-                val p1 = IntArray(w * h)
-                val p2 = IntArray(w * h)
-                val pr = IntArray(w * h)
-                avg1.getPixels(p1, 0, w, 0, 0, w, h)
-                avg2.getPixels(p2, 0, w, 0, 0, w, h)
-                for (i in 0 until w * h) {
-                    val r = (((p1[i] shr 16) and 0xFF) + ((p2[i] shr 16) and 0xFF)) / 2
-                    val g = (((p1[i] shr 8) and 0xFF) + ((p2[i] shr 8) and 0xFF)) / 2
-                    val b = ((p1[i] and 0xFF) + (p2[i] and 0xFF)) / 2
-                    pr[i] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
-                }
-                result.setPixels(pr, 0, w, 0, 0, w, h)
-
-                if (s1 !== bmp1) s1.recycle()
-                if (s2 !== bmp2) s2.recycle()
-                avg1.recycle()
-                avg2.recycle()
-
-                runOnUiThread {
-                    resultBitmap = result
-                    previewResult.setImageBitmap(result)
-                    progressBar.visibility = View.GONE
-                    statusText.text = "Averaged! ${w}x${h}"
-                    isProcessing = false
-                    btnSave.isEnabled = true
-                    updateButtons()
-                }
-            } else {
-                // Single image: just toroidal average
-                val src = (bmp1 ?: bmp2)!!
+            Thread {
                 runOnUiThread { progressBar.progress = 30 }
-                val result = toroidalAverage(src)
+                val result = toroidalAverage(snapshot)
+                snapshot.recycle()
                 runOnUiThread {
                     resultBitmap = result
                     previewResult.setImageBitmap(result)
                     progressBar.visibility = View.GONE
-                    statusText.text = "Averaged! ${src.width}x${src.height}"
+                    statusText.text = "Re-averaged! ${result.width}x${result.height}"
                     isProcessing = false
-                    btnSave.isEnabled = true
                     updateButtons()
                 }
-            }
-        }.start()
+            }.start()
+        } else {
+            statusText.text = "Averaging..."
+
+            Thread {
+                if (bmp1 != null && bmp2 != null) {
+                    val w = minOf(bmp1.width, bmp2.width)
+                    val h = minOf(bmp1.height, bmp2.height)
+                    val s1 = Bitmap.createScaledBitmap(bmp1, w, h, true)
+                    val s2 = Bitmap.createScaledBitmap(bmp2, w, h, true)
+
+                    runOnUiThread { progressBar.progress = 20 }
+                    val avg1 = toroidalAverage(s1)
+                    runOnUiThread { progressBar.progress = 50 }
+                    val avg2 = toroidalAverage(s2)
+                    runOnUiThread { progressBar.progress = 80 }
+
+                    val result = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                    val p1 = IntArray(w * h)
+                    val p2 = IntArray(w * h)
+                    val pr = IntArray(w * h)
+                    avg1.getPixels(p1, 0, w, 0, 0, w, h)
+                    avg2.getPixels(p2, 0, w, 0, 0, w, h)
+                    for (i in 0 until w * h) {
+                        val r = (((p1[i] shr 16) and 0xFF) + ((p2[i] shr 16) and 0xFF)) / 2
+                        val g = (((p1[i] shr 8) and 0xFF) + ((p2[i] shr 8) and 0xFF)) / 2
+                        val b = ((p1[i] and 0xFF) + (p2[i] and 0xFF)) / 2
+                        pr[i] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+                    }
+                    result.setPixels(pr, 0, w, 0, 0, w, h)
+
+                    if (s1 !== bmp1) s1.recycle()
+                    if (s2 !== bmp2) s2.recycle()
+                    avg1.recycle()
+                    avg2.recycle()
+
+                    runOnUiThread {
+                        resultBitmap = result
+                        previewResult.setImageBitmap(result)
+                        progressBar.visibility = View.GONE
+                        statusText.text = "Averaged! ${w}x${h}"
+                        isProcessing = false
+                        updateButtons()
+                    }
+                } else {
+                    val src = (bmp1 ?: bmp2)!!
+                    runOnUiThread { progressBar.progress = 30 }
+                    val result = toroidalAverage(src)
+                    runOnUiThread {
+                        resultBitmap = result
+                        previewResult.setImageBitmap(result)
+                        progressBar.visibility = View.GONE
+                        statusText.text = "Averaged! ${src.width}x${src.height}"
+                        isProcessing = false
+                        updateButtons()
+                    }
+                }
+            }.start()
+        }
     }
 
     private fun multiplyImages() {
