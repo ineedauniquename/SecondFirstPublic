@@ -17,8 +17,11 @@ echo "=== Cleaning build dir ==="
 rm -rf "$BUILD_DIR" && mkdir -p "$BUILD_DIR/classes" "$BUILD_DIR/compiled-res" "$BUILD_DIR/stdlib-classes"
 
 echo "=== Compiling Kotlin ==="
+# -Xlambdas=class -Xsam-conversions=class avoids invokedynamic bytecode
+# that the old dx dexer cannot handle properly
 java -cp "$KOTLIN_CP" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler \
-    "$SRC" -d "$BUILD_DIR/classes" -cp "$ANDROID_JAR:$KOTLIN_STDLIB" -no-stdlib -jvm-target 1.8
+    "$SRC" -d "$BUILD_DIR/classes" -cp "$ANDROID_JAR:$KOTLIN_STDLIB" \
+    -no-stdlib -jvm-target 1.8 -Xlambdas=class -Xsam-conversions=class
 
 echo "=== Extracting kotlin-stdlib ==="
 cd "$BUILD_DIR/stdlib-classes" && jar xf "$KOTLIN_STDLIB"
