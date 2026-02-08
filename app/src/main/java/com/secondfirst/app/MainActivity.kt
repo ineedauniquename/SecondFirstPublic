@@ -12,7 +12,9 @@ import android.provider.MediaStore
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.text.InputType
 import android.widget.Button
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -38,6 +40,7 @@ class MainActivity : Activity() {
     private lateinit var btnClear2: Button
     private lateinit var btnMultiply: Button
     private lateinit var btnAverage: Button
+    private lateinit var biasInput: EditText
     private lateinit var btnClearResult: Button
     private lateinit var btnSave: Button
     private lateinit var statusText: TextView
@@ -136,6 +139,42 @@ class MainActivity : Activity() {
         }
         btnAverage.setOnClickListener { averageImages() }
         layout.addView(btnAverage)
+
+        // Bias input row
+        val biasRow = buttonRow()
+        val biasLabel = TextView(this).apply {
+            text = "Bias:"
+            textSize = 16f
+            setTextColor(Color.WHITE)
+            setGravity(Gravity.CENTER_VERTICAL)
+            setPadding(8, 0, 16, 0)
+        }
+        biasInput = EditText(this).apply {
+            setText("1.0")
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.parseColor("#2D2D30"))
+            inputType = InputType.TYPE_CLASS_NUMBER or
+                InputType.TYPE_NUMBER_FLAG_DECIMAL or
+                InputType.TYPE_NUMBER_FLAG_SIGNED
+            setPadding(24, 16, 24, 16)
+            textSize = 16f
+            setGravity(Gravity.CENTER)
+        }
+        val biasHint = TextView(this).apply {
+            text = "(result-img1)*bias+img1"
+            textSize = 11f
+            setTextColor(Color.parseColor("#808080"))
+            setGravity(Gravity.CENTER_VERTICAL)
+            setPadding(16, 0, 0, 0)
+        }
+        biasRow.addView(biasLabel, rowChildParams(1f))
+        biasRow.addView(biasInput, rowChildParams(1.5f))
+        biasRow.addView(biasHint, rowChildParams(3f))
+        val biasRowParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { setMargins(0, 16, 0, 16) }
+        layout.addView(biasRow, biasRowParams)
 
         // Progress bar
         progressBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
@@ -370,6 +409,43 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun getBias(): Float {
+        return try {
+            biasInput.text.toString().toFloat()
+        } catch (e: Exception) {
+            1.0f
+        }
+    }
+
+    // Apply bias: output = (result - img1) * bias + img1, per channel, clamped 0-255
+    private fun applyBias(raw: Bitmap, ref: Bitmap, bias: Float): Bitmap {
+        if (bias == 1.0f) return raw
+        val w = raw.width
+        val h = raw.height
+        val refScaled = Bitmap.createScaledBitmap(ref, w, h, true)
+        val rawPx = IntArray(w * h)
+        val refPx = IntArray(w * h)
+        raw.getPixels(rawPx, 0, w, 0, 0, w, h)
+        refScaled.getPixels(refPx, 0, w, 0, 0, w, h)
+        val out = IntArray(w * h)
+        for (i in 0 until w * h) {
+            val rr = (rawPx[i] shr 16) and 0xFF
+            val rg = (rawPx[i] shr 8) and 0xFF
+            val rb = rawPx[i] and 0xFF
+            val ir = (refPx[i] shr 16) and 0xFF
+            val ig = (refPx[i] shr 8) and 0xFF
+            val ib = refPx[i] and 0xFF
+            val r = ((rr - ir) * bias + ir).toInt().coerceIn(0, 255)
+            val g = ((rg - ig) * bias + ig).toInt().coerceIn(0, 255)
+            val b = ((rb - ib) * bias + ib).toInt().coerceIn(0, 255)
+            out[i] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+        }
+        if (refScaled !== ref) refScaled.recycle()
+        val result = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        result.setPixels(out, 0, w, 0, 0, w, h)
+        return result
+    }
+
     // 3x3 box average with toroidal wrapping (image treated as torus)
     private fun toroidalAverage(src: Bitmap): Bitmap {
         val w = src.width
@@ -429,11 +505,17 @@ class MainActivity : Activity() {
                 runOnUiThread { progressBar.progress = 30 }
                 val result = toroidalAverage(snapshot)
                 snapshot.recycle()
+
+                val bias = getBias()
+                val biased = if (bias != 1.0f && bmp1 != null) applyBias(result, bmp1, bias) else result
+                if (biased !== result) result.recycle()
+
                 runOnUiThread {
-                    resultBitmap = result
-                    previewResult.setImageBitmap(result)
+                    resultBitmap = biased
+                    previewResult.setImageBitmap(biased)
                     progressBar.visibility = View.GONE
-                    statusText.text = "Re-averaged! ${result.width}x${result.height}"
+                    val biasStr = if (bias != 1.0f && bmp1 != null) " bias=$bias" else ""
+                    statusText.text = "Re-averaged! ${biased.width}x${biased.height}$biasStr"
                     isProcessing = false
                     updateButtons()
                 }
@@ -473,11 +555,16 @@ class MainActivity : Activity() {
                     avg1.recycle()
                     avg2.recycle()
 
+                    val bias = getBias()
+                    val biased = if (bias != 1.0f && bmp1 != null) applyBias(result, bmp1, bias) else result
+                    if (biased !== result) result.recycle()
+
                     runOnUiThread {
-                        resultBitmap = result
-                        previewResult.setImageBitmap(result)
+                        resultBitmap = biased
+                        previewResult.setImageBitmap(biased)
                         progressBar.visibility = View.GONE
-                        statusText.text = "Averaged! ${w}x${h}"
+                        val biasStr = if (bias != 1.0f && bmp1 != null) " bias=$bias" else ""
+                        statusText.text = "Averaged! ${w}x${h}$biasStr"
                         isProcessing = false
                         updateButtons()
                     }
@@ -485,11 +572,17 @@ class MainActivity : Activity() {
                     val src = (bmp1 ?: bmp2)!!
                     runOnUiThread { progressBar.progress = 30 }
                     val result = toroidalAverage(src)
+
+                    val bias = getBias()
+                    val biased = if (bias != 1.0f && bmp1 != null) applyBias(result, bmp1, bias) else result
+                    if (biased !== result) result.recycle()
+
                     runOnUiThread {
-                        resultBitmap = result
-                        previewResult.setImageBitmap(result)
+                        resultBitmap = biased
+                        previewResult.setImageBitmap(biased)
                         progressBar.visibility = View.GONE
-                        statusText.text = "Averaged! ${src.width}x${src.height}"
+                        val biasStr = if (bias != 1.0f && bmp1 != null) " bias=$bias" else ""
+                        statusText.text = "Averaged! ${src.width}x${src.height}$biasStr"
                         isProcessing = false
                         updateButtons()
                     }
@@ -558,11 +651,16 @@ class MainActivity : Activity() {
             if (scaled1 !== bmp1) scaled1.recycle()
             if (scaled2 !== bmp2) scaled2.recycle()
 
+            val bias = getBias()
+            val biased = if (bias != 1.0f) applyBias(result, bmp1, bias) else result
+            if (biased !== result) result.recycle()
+
             runOnUiThread {
-                resultBitmap = result
-                previewResult.setImageBitmap(result)
+                resultBitmap = biased
+                previewResult.setImageBitmap(biased)
                 progressBar.visibility = View.GONE
-                statusText.text = "Done! ${width}x${height} — ${width * height} pixels multiplied"
+                val biasStr = if (bias != 1.0f) " bias=$bias" else ""
+                statusText.text = "Done! ${width}x${height}$biasStr"
                 isProcessing = false
                 btnSave.isEnabled = true
                 updateButtons()
