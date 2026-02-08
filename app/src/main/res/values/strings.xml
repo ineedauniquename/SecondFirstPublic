@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SecondFirst</string>
+    <string name="btn_tap">Tap Me</string>
+    <string name="btn_reset">Reset</string>
+    <string name="tap_count">Taps: %1$d</string>
+</resources>
