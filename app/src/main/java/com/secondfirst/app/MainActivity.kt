@@ -576,6 +576,8 @@ class MainActivity : Activity() {
     private class ExprVar(val name: String, val neighbor: Int) : Expr()
     private class ExprBinOp(val op: Char, val left: Expr, val right: Expr) : Expr()
     private class ExprNeg(val inner: Expr) : Expr()
+    private class ExprAvg(val ch: Int, val img: Int, val radius: Int) : Expr()
+    // ch: -1=current(P), 0=R, 1=G, 2=B; img: 1 or 2; radius: 1+ (grid = 2r+1 squared)
 
     private class ExprParser(private val input: String) {
         private var pos = 0
@@ -607,6 +609,29 @@ class MainActivity : Activity() {
             if (c == '(') { pos++; val inner = parseExpr(); skipWs()
                 if (pos >= input.length || input[pos] != ')') throw RuntimeException("Missing ')'")
                 pos++; return inner
+            }
+            if ((c == 'a' || c == 'A') && pos + 3 < input.length &&
+                (input[pos+1] == 'v' || input[pos+1] == 'V') &&
+                (input[pos+2] == 'g' || input[pos+2] == 'G') && input[pos+3] == '(') {
+                pos += 4; skipWs()
+                val cc = input[pos].lowercaseChar()
+                var ach = -1
+                if (cc == 'r') ach = 0 else if (cc == 'g') ach = 1 else if (cc == 'b') ach = 2
+                else if (cc != 'p') throw RuntimeException("Expected P/R/G/B in avg()")
+                pos++
+                var aimg = 1
+                if (pos < input.length && (input[pos] == '1' || input[pos] == '2')) { aimg = input[pos] - '0'; pos++ }
+                skipWs()
+                if (pos >= input.length || input[pos] != ',') throw RuntimeException("Expected ',' in avg()")
+                pos++; skipWs()
+                val rs = pos
+                while (pos < input.length && input[pos].isDigit()) pos++
+                if (pos == rs) throw RuntimeException("Expected radius in avg()")
+                val rad = input.substring(rs, pos).toInt()
+                skipWs()
+                if (pos >= input.length || input[pos] != ')') throw RuntimeException("Expected ')' in avg()")
+                pos++
+                return ExprAvg(ach, aimg, rad)
             }
             if (c == 'P' || c == 'p') {
                 if (pos + 1 < input.length && (input[pos + 1] == '1' || input[pos + 1] == '2')) {
@@ -663,6 +688,20 @@ class MainActivity : Activity() {
             if (e.name == "b2") return chVal(px2[ni], 2)
             return 0f
         }
+        if (e is ExprAvg) {
+            val pxArr = if (e.img == 1) px1 else px2
+            val ch = if (e.ch == -1) curCh else e.ch
+            var sum = 0f; var count = 0
+            for (dy in -e.radius..e.radius) {
+                for (dx in -e.radius..e.radius) {
+                    val nx = ((x + dx) % w + w) % w
+                    val ny = ((y + dy) % h + h) % h
+                    sum += chVal(pxArr[ny * w + nx], ch)
+                    count++
+                }
+            }
+            return sum / count
+        }
         if (e is ExprNeg) return -evalExpr(e.inner, px1, px2, x, y, w, h, curCh, divFlag)
         if (e is ExprBinOp) {
             val l = evalExpr(e.left, px1, px2, x, y, w, h, curCh, divFlag)
@@ -680,6 +719,7 @@ class MainActivity : Activity() {
 
     private fun exprUsesImg2(e: Expr): Boolean {
         if (e is ExprVar) return e.name == "P2" || e.name == "r2" || e.name == "g2" || e.name == "b2"
+        if (e is ExprAvg) return e.img == 2
         if (e is ExprNum) return false
         if (e is ExprNeg) return exprUsesImg2(e.inner)
         if (e is ExprBinOp) return exprUsesImg2(e.left) || exprUsesImg2(e.right)
