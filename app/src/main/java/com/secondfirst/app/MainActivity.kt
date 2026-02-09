@@ -202,7 +202,8 @@ class MainActivity : Activity() {
             arrayOf("5", "6", "7", "8"),
             arrayOf("9", "0", ".", "\u232B"),
             arrayOf("(", ")", "[", "]"),
-            arrayOf("+", "-", "*", "/")
+            arrayOf("+", "-", "*", "/"),
+            arrayOf(" ", "", "", "")
         )
         for (row in kbKeys) {
             val kbRow = LinearLayout(this).apply {
@@ -214,17 +215,18 @@ class MainActivity : Activity() {
             }
             for (key in row) {
                 val btn = Button(this).apply {
-                    text = key
-                    setTextColor(Color.WHITE)
-                    setBackgroundColor(Color.parseColor("#3A3A3A"))
+                    text = if (key == " ") "SP" else key
+                    setTextColor(if (key.isEmpty()) Color.TRANSPARENT else Color.WHITE)
+                    setBackgroundColor(if (key.isEmpty()) Color.parseColor("#1C1B1F") else Color.parseColor("#3A3A3A"))
                     textSize = 14f
-                    setPadding(0, 0, 0, 0)
+                    setPadding(0, 5, 0, 5)
                     minimumWidth = 0
                     minWidth = 0
                     minimumHeight = 0
                     minHeight = 0
+                    isEnabled = key.isNotEmpty()
                 }
-                btn.setOnClickListener { onKbKey(key) }
+                if (key.isNotEmpty()) btn.setOnClickListener { onKbKey(key) }
                 val w = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
                 w.setMargins(2, 2, 2, 2)
                 kbRow.addView(btn, w)
