@@ -160,6 +160,20 @@ class MainActivity : Activity() {
         rowResult.addView(btnClearResult, rowChildParams(1f))
         layout.addView(rowResult)
 
+        // Result to image buttons
+        val rowCopy = buttonRow()
+        val btnToImg1 = styledButton("Result \u2192 P1").apply {
+            setBackgroundColor(Color.parseColor("#4A4458"))
+        }
+        btnToImg1.setOnClickListener { copyResultToImage(1) }
+        val btnToImg2 = styledButton("Result \u2192 P2").apply {
+            setBackgroundColor(Color.parseColor("#4A4458"))
+        }
+        btnToImg2.setOnClickListener { copyResultToImage(2) }
+        rowCopy.addView(btnToImg1, rowChildParams(1f))
+        rowCopy.addView(btnToImg2, rowChildParams(1f))
+        layout.addView(rowCopy)
+
         // Brighten / Darken row
         val rowBrightness = buttonRow()
         val btnBrighten = styledButton("Brighten +10%").apply {
@@ -418,6 +432,28 @@ class MainActivity : Activity() {
         previewResult.setImageBitmap(result)
         val pct = if (factor > 1f) "+${((factor - 1f) * 100).toInt()}%" else "-${((1f - factor) * 100).toInt()}%"
         statusText.text = "Brightness $pct applied (${w}x${h})"
+    }
+
+    private fun copyResultToImage(which: Int) {
+        val bmp = resultBitmap ?: return
+        val copy = bmp.copy(Bitmap.Config.ARGB_8888, false)
+        when (which) {
+            1 -> {
+                bitmap1 = copy
+                preview1.setImageBitmap(copy)
+                btnPick1.text = "Image 1 (${copy.width}x${copy.height})"
+                btnClear1.isEnabled = true
+                statusText.text = "Result copied to Image 1"
+            }
+            2 -> {
+                bitmap2 = copy
+                preview2.setImageBitmap(copy)
+                btnPick2.text = "Image 2 (${copy.width}x${copy.height})"
+                btnClear2.isEnabled = true
+                statusText.text = "Result copied to Image 2"
+            }
+        }
+        updateButtons()
     }
 
     private fun clearResult() {
