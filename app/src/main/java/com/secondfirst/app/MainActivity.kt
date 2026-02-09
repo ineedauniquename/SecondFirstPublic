@@ -38,8 +38,6 @@ class MainActivity : Activity() {
     private lateinit var btnClear1: Button
     private lateinit var btnPick2: Button
     private lateinit var btnClear2: Button
-    private lateinit var btnMultiply: Button
-    private lateinit var btnAverage: Button
     private lateinit var biasInput: EditText
     private lateinit var btnClearResult: Button
     private lateinit var btnSave: Button
@@ -80,7 +78,7 @@ class MainActivity : Activity() {
         layout.addView(title)
 
         val subtitle = TextView(this).apply {
-            text = "Select images, then multiply or average pixels"
+            text = "Select images, apply expression to pixels"
             textSize = 14f
             setTextColor(Color.parseColor("#B0B0B0"))
             setGravity(Gravity.CENTER)
@@ -119,84 +117,6 @@ class MainActivity : Activity() {
         row2.addView(btnPick2, rowChildParams(3f))
         row2.addView(btnClear2, rowChildParams(1f))
         layout.addView(row2)
-
-        // Operation buttons
-        val opsLabel = sectionLabel("Operations")
-        val opsParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { setMargins(0, 32, 0, 0) }
-        layout.addView(opsLabel, opsParams)
-
-        btnMultiply = styledButton("Multiply (2 images)").apply {
-            setBackgroundColor(Color.parseColor("#6750A4"))
-            isEnabled = false
-        }
-        btnMultiply.setOnClickListener { multiplyImages() }
-        layout.addView(btnMultiply)
-
-        btnAverage = styledButton("Average (1 or 2 images)").apply {
-            setBackgroundColor(Color.parseColor("#006C4C"))
-            isEnabled = false
-        }
-        btnAverage.setOnClickListener { averageImages() }
-        layout.addView(btnAverage)
-
-        // Expression input row
-        val exprRow = buttonRow()
-        exprInput = EditText(this).apply {
-            setText("P1*P2/255")
-            setTextColor(Color.WHITE)
-            setBackgroundColor(Color.parseColor("#2D2D30"))
-            inputType = InputType.TYPE_CLASS_TEXT
-            setPadding(24, 16, 24, 16)
-            textSize = 14f
-            setSingleLine(true)
-        }
-        btnApplyExpr = styledButton("Apply Expr").apply {
-            setBackgroundColor(Color.parseColor("#7B5EA7"))
-            isEnabled = false
-        }
-        btnApplyExpr.setOnClickListener { applyExpression() }
-        exprRow.addView(exprInput, rowChildParams(3f))
-        exprRow.addView(btnApplyExpr, rowChildParams(1f))
-        layout.addView(exprRow)
-
-        // Bias input row
-        val biasRow = buttonRow()
-        val biasLabel = TextView(this).apply {
-            text = "Bias:"
-            textSize = 16f
-            setTextColor(Color.WHITE)
-            setGravity(Gravity.CENTER_VERTICAL)
-            setPadding(8, 0, 16, 0)
-        }
-        biasInput = EditText(this).apply {
-            setText("1.0")
-            setTextColor(Color.WHITE)
-            setBackgroundColor(Color.parseColor("#2D2D30"))
-            inputType = InputType.TYPE_CLASS_NUMBER or
-                InputType.TYPE_NUMBER_FLAG_DECIMAL or
-                InputType.TYPE_NUMBER_FLAG_SIGNED
-            setPadding(24, 16, 24, 16)
-            textSize = 16f
-            setGravity(Gravity.CENTER)
-        }
-        val biasHint = TextView(this).apply {
-            text = "(result-img1)*bias+img1"
-            textSize = 11f
-            setTextColor(Color.parseColor("#808080"))
-            setGravity(Gravity.CENTER_VERTICAL)
-            setPadding(16, 0, 0, 0)
-        }
-        biasRow.addView(biasLabel, rowChildParams(1f))
-        biasRow.addView(biasInput, rowChildParams(1.5f))
-        biasRow.addView(biasHint, rowChildParams(3f))
-        val biasRowParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { setMargins(0, 16, 0, 16) }
-        layout.addView(biasRow, biasRowParams)
 
         // Progress bar
         progressBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
@@ -253,6 +173,62 @@ class MainActivity : Activity() {
         rowBrightness.addView(btnBrighten, rowChildParams(1f))
         rowBrightness.addView(btnDarken, rowChildParams(1f))
         layout.addView(rowBrightness)
+
+        // Expression input row
+        val exprRow = buttonRow()
+        exprInput = EditText(this).apply {
+            setText("P1*P2/255")
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.parseColor("#2D2D30"))
+            inputType = InputType.TYPE_CLASS_TEXT
+            setPadding(24, 16, 24, 16)
+            textSize = 14f
+            setSingleLine(true)
+        }
+        btnApplyExpr = styledButton("Apply Expr").apply {
+            setBackgroundColor(Color.parseColor("#7B5EA7"))
+            isEnabled = false
+        }
+        btnApplyExpr.setOnClickListener { applyExpression() }
+        exprRow.addView(exprInput, rowChildParams(3f))
+        exprRow.addView(btnApplyExpr, rowChildParams(1f))
+        layout.addView(exprRow)
+
+        // Bias input row
+        val biasRow = buttonRow()
+        val biasLabel = TextView(this).apply {
+            text = "Bias:"
+            textSize = 16f
+            setTextColor(Color.WHITE)
+            setGravity(Gravity.CENTER_VERTICAL)
+            setPadding(8, 0, 16, 0)
+        }
+        biasInput = EditText(this).apply {
+            setText("1.0")
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.parseColor("#2D2D30"))
+            inputType = InputType.TYPE_CLASS_NUMBER or
+                InputType.TYPE_NUMBER_FLAG_DECIMAL or
+                InputType.TYPE_NUMBER_FLAG_SIGNED
+            setPadding(24, 16, 24, 16)
+            textSize = 16f
+            setGravity(Gravity.CENTER)
+        }
+        val biasHint = TextView(this).apply {
+            text = "(result-img1)*bias+img1"
+            textSize = 11f
+            setTextColor(Color.parseColor("#808080"))
+            setGravity(Gravity.CENTER_VERTICAL)
+            setPadding(16, 0, 0, 0)
+        }
+        biasRow.addView(biasLabel, rowChildParams(1f))
+        biasRow.addView(biasInput, rowChildParams(1.5f))
+        biasRow.addView(biasHint, rowChildParams(3f))
+        val biasRowParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { setMargins(0, 16, 0, 16) }
+        layout.addView(biasRow, biasRowParams)
 
         root.addView(layout)
         frameRoot.addView(root)
@@ -400,8 +376,6 @@ class MainActivity : Activity() {
         val has1 = bitmap1 != null
         val has2 = bitmap2 != null
         val hasResult = resultBitmap != null
-        btnMultiply.isEnabled = has1 && has2 && !isProcessing
-        btnAverage.isEnabled = (has1 || has2 || hasResult) && !isProcessing
         btnApplyExpr.isEnabled = (has1 || has2) && !isProcessing
         btnSave.isEnabled = hasResult && !isProcessing
         btnClearResult.isEnabled = hasResult && !isProcessing
@@ -410,11 +384,11 @@ class MainActivity : Activity() {
                 minOf(bitmap1!!.width, bitmap2!!.width)
             }x${minOf(bitmap1!!.height, bitmap2!!.height)}"
         } else if (has1) {
-            statusText.text = "Image 1 loaded. Select Image 2 or use Average."
+            statusText.text = "Image 1 loaded. Select Image 2 or apply expression."
         } else if (has2) {
-            statusText.text = "Image 2 loaded. Select Image 1 or use Average."
+            statusText.text = "Image 2 loaded. Select Image 1 or apply expression."
         } else if (hasResult) {
-            statusText.text = "Result available. Average to blur further."
+            statusText.text = "Result available."
         } else {
             statusText.text = ""
         }
@@ -502,228 +476,6 @@ class MainActivity : Activity() {
         val result = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         result.setPixels(out, 0, w, 0, 0, w, h)
         return result
-    }
-
-    // 3x3 box average with toroidal wrapping (image treated as torus)
-    private fun toroidalAverage(src: Bitmap): Bitmap {
-        val w = src.width
-        val h = src.height
-        val allPixels = IntArray(w * h)
-        src.getPixels(allPixels, 0, w, 0, 0, w, h)
-        val result = IntArray(w * h)
-
-        for (y in 0 until h) {
-            for (x in 0 until w) {
-                var rSum = 0; var gSum = 0; var bSum = 0
-                for (dy in -1..1) {
-                    for (dx in -1..1) {
-                        val nx = (x + dx + w) % w  // toroidal wrap
-                        val ny = (y + dy + h) % h
-                        val p = allPixels[ny * w + nx]
-                        rSum += (p shr 16) and 0xFF
-                        gSum += (p shr 8) and 0xFF
-                        bSum += p and 0xFF
-                    }
-                }
-                val r = rSum / 9
-                val g = gSum / 9
-                val b = bSum / 9
-                result[y * w + x] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
-            }
-        }
-
-        val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-        out.setPixels(result, 0, w, 0, 0, w, h)
-        return out
-    }
-
-    private fun averageImages() {
-        if (isProcessing) return
-        val bmp1 = bitmap1
-        val bmp2 = bitmap2
-        val resBmp = resultBitmap
-
-        // If result exists, average just the result (snapshot copy to avoid self-reference)
-        // Otherwise fall back to source images
-        if (resBmp == null && bmp1 == null && bmp2 == null) return
-
-        isProcessing = true
-        btnMultiply.isEnabled = false
-        btnAverage.isEnabled = false
-        progressBar.visibility = View.VISIBLE
-        progressBar.max = 100
-        progressBar.progress = 0
-
-        if (resBmp != null) {
-            // Average the result image - copy it first so we read from snapshot, not live result
-            statusText.text = "Re-averaging result..."
-            val snapshot = resBmp.copy(Bitmap.Config.ARGB_8888, false)
-
-            Thread {
-                runOnUiThread { progressBar.progress = 30 }
-                val result = toroidalAverage(snapshot)
-                snapshot.recycle()
-
-                val bias = getBias()
-                val biased = if (bias != 1.0f && bmp1 != null) applyBias(result, bmp1, bias) else result
-                if (biased !== result) result.recycle()
-
-                runOnUiThread {
-                    resultBitmap = biased
-                    previewResult.setImageBitmap(biased)
-                    progressBar.visibility = View.GONE
-                    val biasStr = if (bias != 1.0f && bmp1 != null) " bias=$bias" else ""
-                    statusText.text = "Re-averaged! ${biased.width}x${biased.height}$biasStr"
-                    isProcessing = false
-                    updateButtons()
-                }
-            }.start()
-        } else {
-            statusText.text = "Averaging..."
-
-            Thread {
-                if (bmp1 != null && bmp2 != null) {
-                    val w = minOf(bmp1.width, bmp2.width)
-                    val h = minOf(bmp1.height, bmp2.height)
-                    val s1 = Bitmap.createScaledBitmap(bmp1, w, h, true)
-                    val s2 = Bitmap.createScaledBitmap(bmp2, w, h, true)
-
-                    runOnUiThread { progressBar.progress = 20 }
-                    val avg1 = toroidalAverage(s1)
-                    runOnUiThread { progressBar.progress = 50 }
-                    val avg2 = toroidalAverage(s2)
-                    runOnUiThread { progressBar.progress = 80 }
-
-                    val result = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-                    val p1 = IntArray(w * h)
-                    val p2 = IntArray(w * h)
-                    val pr = IntArray(w * h)
-                    avg1.getPixels(p1, 0, w, 0, 0, w, h)
-                    avg2.getPixels(p2, 0, w, 0, 0, w, h)
-                    for (i in 0 until w * h) {
-                        val r = (((p1[i] shr 16) and 0xFF) + ((p2[i] shr 16) and 0xFF)) / 2
-                        val g = (((p1[i] shr 8) and 0xFF) + ((p2[i] shr 8) and 0xFF)) / 2
-                        val b = ((p1[i] and 0xFF) + (p2[i] and 0xFF)) / 2
-                        pr[i] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
-                    }
-                    result.setPixels(pr, 0, w, 0, 0, w, h)
-
-                    if (s1 !== bmp1) s1.recycle()
-                    if (s2 !== bmp2) s2.recycle()
-                    avg1.recycle()
-                    avg2.recycle()
-
-                    val bias = getBias()
-                    val biased = if (bias != 1.0f && bmp1 != null) applyBias(result, bmp1, bias) else result
-                    if (biased !== result) result.recycle()
-
-                    runOnUiThread {
-                        resultBitmap = biased
-                        previewResult.setImageBitmap(biased)
-                        progressBar.visibility = View.GONE
-                        val biasStr = if (bias != 1.0f && bmp1 != null) " bias=$bias" else ""
-                        statusText.text = "Averaged! ${w}x${h}$biasStr"
-                        isProcessing = false
-                        updateButtons()
-                    }
-                } else {
-                    val src = (bmp1 ?: bmp2)!!
-                    runOnUiThread { progressBar.progress = 30 }
-                    val result = toroidalAverage(src)
-
-                    val bias = getBias()
-                    val biased = if (bias != 1.0f && bmp1 != null) applyBias(result, bmp1, bias) else result
-                    if (biased !== result) result.recycle()
-
-                    runOnUiThread {
-                        resultBitmap = biased
-                        previewResult.setImageBitmap(biased)
-                        progressBar.visibility = View.GONE
-                        val biasStr = if (bias != 1.0f && bmp1 != null) " bias=$bias" else ""
-                        statusText.text = "Averaged! ${src.width}x${src.height}$biasStr"
-                        isProcessing = false
-                        updateButtons()
-                    }
-                }
-            }.start()
-        }
-    }
-
-    private fun multiplyImages() {
-        val bmp1 = bitmap1 ?: return
-        val bmp2 = bitmap2 ?: return
-        if (isProcessing) return
-
-        isProcessing = true
-        btnMultiply.isEnabled = false
-        btnAverage.isEnabled = false
-        progressBar.visibility = View.VISIBLE
-        progressBar.progress = 0
-        statusText.text = "Multiplying pixels..."
-
-        val width = minOf(bmp1.width, bmp2.width)
-        val height = minOf(bmp1.height, bmp2.height)
-        progressBar.max = height
-
-        val scaled1 = Bitmap.createScaledBitmap(bmp1, width, height, true)
-        val scaled2 = Bitmap.createScaledBitmap(bmp2, width, height, true)
-
-        Thread {
-            val result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-
-            val pixels1 = IntArray(width)
-            val pixels2 = IntArray(width)
-            val resultPixels = IntArray(width)
-
-            for (y in 0 until height) {
-                scaled1.getPixels(pixels1, 0, width, 0, y, width, 1)
-                scaled2.getPixels(pixels2, 0, width, 0, y, width, 1)
-
-                for (x in 0 until width) {
-                    val p1 = pixels1[x]
-                    val p2 = pixels2[x]
-
-                    val r1 = (p1 shr 16) and 0xFF
-                    val g1 = (p1 shr 8) and 0xFF
-                    val b1 = p1 and 0xFF
-
-                    val r2 = (p2 shr 16) and 0xFF
-                    val g2 = (p2 shr 8) and 0xFF
-                    val b2 = p2 and 0xFF
-
-                    val r = (r1 * r2) % 256
-                    val g = (g1 * g2) % 256
-                    val b = (b1 * b2) % 256
-
-                    resultPixels[x] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
-                }
-
-                result.setPixels(resultPixels, 0, width, 0, y, width, 1)
-
-                if (y % 50 == 0) {
-                    val progress = y
-                    runOnUiThread { progressBar.progress = progress }
-                }
-            }
-
-            if (scaled1 !== bmp1) scaled1.recycle()
-            if (scaled2 !== bmp2) scaled2.recycle()
-
-            val bias = getBias()
-            val biased = if (bias != 1.0f) applyBias(result, bmp1, bias) else result
-            if (biased !== result) result.recycle()
-
-            runOnUiThread {
-                resultBitmap = biased
-                previewResult.setImageBitmap(biased)
-                progressBar.visibility = View.GONE
-                val biasStr = if (bias != 1.0f) " bias=$bias" else ""
-                statusText.text = "Done! ${width}x${height}$biasStr"
-                isProcessing = false
-                btnSave.isEnabled = true
-                updateButtons()
-            }
-        }.start()
     }
 
     // --- Expression parser (recursive descent) ---
