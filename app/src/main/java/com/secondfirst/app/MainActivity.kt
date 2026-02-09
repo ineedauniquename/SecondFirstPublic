@@ -197,9 +197,12 @@ class MainActivity : Activity() {
 
         // Custom keyboard for formula input
         val kbKeys = arrayOf(
-            arrayOf("P", "R", "G", "B", "(", ")", "[", "]"),
-            arrayOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "0"),
-            arrayOf("+", "-", "*", "/", " ", "\u2190", "\u2192", "\u232B")
+            arrayOf("P", "R", "G", "B"),
+            arrayOf("1", "2", "3", "4"),
+            arrayOf("5", "6", "7", "8"),
+            arrayOf("9", "0", ".", "\u232B"),
+            arrayOf("(", ")", "[", "]"),
+            arrayOf("+", "-", "*", "/")
         )
         for (row in kbKeys) {
             val kbRow = LinearLayout(this).apply {
