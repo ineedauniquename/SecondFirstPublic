@@ -217,7 +217,7 @@ class MainActivity : Activity() {
             arrayOf("9", "0", ".", "\u232B"),
             arrayOf("(", ")", "[", "]"),
             arrayOf("+", "-", "*", "/"),
-            arrayOf(" ", "", "", "")
+            arrayOf(" ", ",", "avg(", "")
         )
         for (row in kbKeys) {
             val kbRow = LinearLayout(this).apply {
@@ -229,7 +229,7 @@ class MainActivity : Activity() {
             }
             for (key in row) {
                 val btn = Button(this).apply {
-                    text = if (key == " ") "SP" else key
+                    text = if (key == " ") "SP" else if (key == ",") "," else key
                     setTextColor(if (key.isEmpty()) Color.TRANSPARENT else Color.WHITE)
                     setBackgroundColor(if (key.isEmpty()) Color.parseColor("#1C1B1F") else Color.parseColor("#3A3A3A"))
                     textSize = 14f
