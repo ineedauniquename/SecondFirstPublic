@@ -849,9 +849,9 @@ class MainActivity : Activity() {
             for (y in 0 until h) {
                 for (x in 0 until w) {
                     val i = y * w + x
-                    val rr = evalExpr(parsed, ((px1[i] shr 16) and 0xFF).toFloat(), ((px2[i] shr 16) and 0xFF).toFloat()).toInt().coerceIn(0, 255)
-                    val rg = evalExpr(parsed, ((px1[i] shr 8) and 0xFF).toFloat(), ((px2[i] shr 8) and 0xFF).toFloat()).toInt().coerceIn(0, 255)
-                    val rb = evalExpr(parsed, (px1[i] and 0xFF).toFloat(), (px2[i] and 0xFF).toFloat()).toInt().coerceIn(0, 255)
+                    val rr = evalExpr(parsed, ((px1[i] shr 16) and 0xFF).toFloat(), ((px2[i] shr 16) and 0xFF).toFloat()).toInt() and 0xFF
+                    val rg = evalExpr(parsed, ((px1[i] shr 8) and 0xFF).toFloat(), ((px2[i] shr 8) and 0xFF).toFloat()).toInt() and 0xFF
+                    val rb = evalExpr(parsed, (px1[i] and 0xFF).toFloat(), (px2[i] and 0xFF).toFloat()).toInt() and 0xFF
                     outPx[i] = (0xFF shl 24) or (rr shl 16) or (rg shl 8) or rb
                 }
                 if (y % 50 == 0) { val p = y; runOnUiThread { progressBar.progress = p } }
