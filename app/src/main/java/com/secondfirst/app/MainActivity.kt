@@ -47,6 +47,8 @@ class MainActivity : Activity() {
     private lateinit var progressBar: ProgressBar
     private lateinit var fullscreenOverlay: FrameLayout
     private lateinit var fullscreenImage: ImageView
+    private lateinit var exprInput: EditText
+    private lateinit var btnApplyExpr: Button
 
     private var bitmap1: Bitmap? = null
     private var bitmap2: Bitmap? = null
@@ -139,6 +141,26 @@ class MainActivity : Activity() {
         }
         btnAverage.setOnClickListener { averageImages() }
         layout.addView(btnAverage)
+
+        // Expression input row
+        val exprRow = buttonRow()
+        exprInput = EditText(this).apply {
+            setText("P1*P2/255")
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.parseColor("#2D2D30"))
+            inputType = InputType.TYPE_CLASS_TEXT
+            setPadding(24, 16, 24, 16)
+            textSize = 14f
+            setSingleLine(true)
+        }
+        btnApplyExpr = styledButton("Apply Expr").apply {
+            setBackgroundColor(Color.parseColor("#7B5EA7"))
+            isEnabled = false
+        }
+        btnApplyExpr.setOnClickListener { applyExpression() }
+        exprRow.addView(exprInput, rowChildParams(3f))
+        exprRow.addView(btnApplyExpr, rowChildParams(1f))
+        layout.addView(exprRow)
 
         // Bias input row
         val biasRow = buttonRow()
@@ -380,6 +402,7 @@ class MainActivity : Activity() {
         val hasResult = resultBitmap != null
         btnMultiply.isEnabled = has1 && has2 && !isProcessing
         btnAverage.isEnabled = (has1 || has2 || hasResult) && !isProcessing
+        btnApplyExpr.isEnabled = (has1 || has2) && !isProcessing
         btnSave.isEnabled = hasResult && !isProcessing
         btnClearResult.isEnabled = hasResult && !isProcessing
         if (has1 && has2) {
@@ -698,6 +721,158 @@ class MainActivity : Activity() {
                 statusText.text = "Done! ${width}x${height}$biasStr"
                 isProcessing = false
                 btnSave.isEnabled = true
+                updateButtons()
+            }
+        }.start()
+    }
+
+    // --- Expression parser (recursive descent) ---
+    private abstract class Expr
+    private class ExprNum(val value: Float) : Expr()
+    private class ExprVar(val name: String) : Expr()
+    private class ExprBinOp(val op: Char, val left: Expr, val right: Expr) : Expr()
+    private class ExprNeg(val inner: Expr) : Expr()
+
+    private class ExprParser(private val input: String) {
+        private var pos = 0
+        fun parse(): Expr {
+            val r = parseExpr(); skipWs()
+            if (pos < input.length) throw RuntimeException("Unexpected '${input[pos]}' at pos $pos")
+            return r
+        }
+        private fun skipWs() { while (pos < input.length && input[pos] == ' ') pos++ }
+        private fun parseExpr(): Expr {
+            var left = parseTerm(); skipWs()
+            while (pos < input.length && (input[pos] == '+' || input[pos] == '-')) {
+                val op = input[pos]; pos++; val right = parseTerm(); left = ExprBinOp(op, left, right); skipWs()
+            }
+            return left
+        }
+        private fun parseTerm(): Expr {
+            var left = parseFactor(); skipWs()
+            while (pos < input.length && (input[pos] == '*' || input[pos] == '/')) {
+                val op = input[pos]; pos++; val right = parseFactor(); left = ExprBinOp(op, left, right); skipWs()
+            }
+            return left
+        }
+        private fun parseFactor(): Expr {
+            skipWs()
+            if (pos >= input.length) throw RuntimeException("Unexpected end")
+            val c = input[pos]
+            if (c == '-') { pos++; return ExprNeg(parseFactor()) }
+            if (c == '(') { pos++; val inner = parseExpr(); skipWs()
+                if (pos >= input.length || input[pos] != ')') throw RuntimeException("Missing ')'")
+                pos++; return inner
+            }
+            if (c == 'P' || c == 'p') {
+                if (pos + 1 < input.length && input[pos + 1] == '1') { pos += 2; return ExprVar("P1") }
+                if (pos + 1 < input.length && input[pos + 1] == '2') { pos += 2; return ExprVar("P2") }
+                throw RuntimeException("Unknown var at pos $pos")
+            }
+            if (c.isDigit() || c == '.') {
+                val start = pos
+                while (pos < input.length && (input[pos].isDigit() || input[pos] == '.')) pos++
+                return ExprNum(input.substring(start, pos).toFloat())
+            }
+            throw RuntimeException("Unexpected '$c' at pos $pos")
+        }
+    }
+
+    private fun evalExpr(e: Expr, p1: Float, p2: Float): Float {
+        if (e is ExprNum) return e.value
+        if (e is ExprVar) return if (e.name == "P1") p1 else p2
+        if (e is ExprNeg) return -evalExpr(e.inner, p1, p2)
+        if (e is ExprBinOp) {
+            val l = evalExpr(e.left, p1, p2)
+            val r = evalExpr(e.right, p1, p2)
+            if (e.op == '+') return l + r
+            if (e.op == '-') return l - r
+            if (e.op == '*') return l * r
+            if (e.op == '/') return if (r != 0f) l / r else 0f
+        }
+        return 0f
+    }
+
+    private fun exprUsesVar(e: Expr, name: String): Boolean {
+        if (e is ExprVar) return e.name == name
+        if (e is ExprNum) return false
+        if (e is ExprNeg) return exprUsesVar(e.inner, name)
+        if (e is ExprBinOp) return exprUsesVar(e.left, name) || exprUsesVar(e.right, name)
+        return false
+    }
+
+    private fun applyExpression() {
+        if (isProcessing) return
+        val bmp1 = bitmap1
+        val bmp2 = bitmap2
+        val exprStr = exprInput.text.toString().trim()
+        if (exprStr.isEmpty()) {
+            Toast.makeText(this, "Enter an expression", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val parsed: Expr
+        try { parsed = ExprParser(exprStr).parse() }
+        catch (ex: Exception) {
+            Toast.makeText(this, "Parse error: ${ex.message}", Toast.LENGTH_LONG).show()
+            return
+        }
+        if (exprUsesVar(parsed, "P1") && bmp1 == null) {
+            Toast.makeText(this, "Expression uses P1 but Image 1 not loaded", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (exprUsesVar(parsed, "P2") && bmp2 == null) {
+            Toast.makeText(this, "Expression uses P2 but Image 2 not loaded", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (bmp1 == null && bmp2 == null) return
+
+        isProcessing = true
+        updateButtons()
+        progressBar.visibility = View.VISIBLE
+        progressBar.progress = 0
+        statusText.text = "Applying: $exprStr"
+
+        Thread {
+            val w: Int; val h: Int
+            if (bmp1 != null && bmp2 != null) { w = minOf(bmp1.width, bmp2.width); h = minOf(bmp1.height, bmp2.height) }
+            else if (bmp1 != null) { w = bmp1.width; h = bmp1.height }
+            else { w = bmp2!!.width; h = bmp2.height }
+
+            val s1 = if (bmp1 != null) Bitmap.createScaledBitmap(bmp1, w, h, true) else null
+            val s2 = if (bmp2 != null) Bitmap.createScaledBitmap(bmp2, w, h, true) else null
+            val px1 = IntArray(w * h); val px2 = IntArray(w * h)
+            s1?.getPixels(px1, 0, w, 0, 0, w, h)
+            s2?.getPixels(px2, 0, w, 0, 0, w, h)
+            val outPx = IntArray(w * h)
+            runOnUiThread { progressBar.max = h }
+
+            for (y in 0 until h) {
+                for (x in 0 until w) {
+                    val i = y * w + x
+                    val rr = evalExpr(parsed, ((px1[i] shr 16) and 0xFF).toFloat(), ((px2[i] shr 16) and 0xFF).toFloat()).toInt().coerceIn(0, 255)
+                    val rg = evalExpr(parsed, ((px1[i] shr 8) and 0xFF).toFloat(), ((px2[i] shr 8) and 0xFF).toFloat()).toInt().coerceIn(0, 255)
+                    val rb = evalExpr(parsed, (px1[i] and 0xFF).toFloat(), (px2[i] and 0xFF).toFloat()).toInt().coerceIn(0, 255)
+                    outPx[i] = (0xFF shl 24) or (rr shl 16) or (rg shl 8) or rb
+                }
+                if (y % 50 == 0) { val p = y; runOnUiThread { progressBar.progress = p } }
+            }
+
+            if (s1 != null && s1 !== bmp1) s1.recycle()
+            if (s2 != null && s2 !== bmp2) s2.recycle()
+            val result = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            result.setPixels(outPx, 0, w, 0, 0, w, h)
+
+            val bias = getBias()
+            val biased = if (bias != 1.0f && bmp1 != null) applyBias(result, bmp1, bias) else result
+            if (biased !== result) result.recycle()
+
+            runOnUiThread {
+                resultBitmap = biased
+                previewResult.setImageBitmap(biased)
+                progressBar.visibility = View.GONE
+                val biasStr = if (bias != 1.0f && bmp1 != null) " bias=$bias" else ""
+                statusText.text = "Expr done! ${w}x${h}$biasStr"
+                isProcessing = false
                 updateButtons()
             }
         }.start()
