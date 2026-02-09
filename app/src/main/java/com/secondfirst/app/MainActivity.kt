@@ -184,6 +184,7 @@ class MainActivity : Activity() {
             setPadding(24, 16, 24, 16)
             textSize = 14f
             setSingleLine(true)
+            showSoftInputOnFocus = false
         }
         btnApplyExpr = styledButton("Apply Expr").apply {
             setBackgroundColor(Color.parseColor("#7B5EA7"))
@@ -193,6 +194,40 @@ class MainActivity : Activity() {
         exprRow.addView(exprInput, rowChildParams(3f))
         exprRow.addView(btnApplyExpr, rowChildParams(1f))
         layout.addView(exprRow)
+
+        // Custom keyboard for formula input
+        val kbKeys = arrayOf(
+            arrayOf("P", "R", "G", "B", "(", ")", "[", "]"),
+            arrayOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "0"),
+            arrayOf("+", "-", "*", "/", " ", "\u2190", "\u2192", "\u232B")
+        )
+        for (row in kbKeys) {
+            val kbRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+            }
+            for (key in row) {
+                val btn = Button(this).apply {
+                    text = key
+                    setTextColor(Color.WHITE)
+                    setBackgroundColor(Color.parseColor("#3A3A3A"))
+                    textSize = 14f
+                    setPadding(0, 0, 0, 0)
+                    minimumWidth = 0
+                    minWidth = 0
+                    minimumHeight = 0
+                    minHeight = 0
+                }
+                btn.setOnClickListener { onKbKey(key) }
+                val w = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                w.setMargins(2, 2, 2, 2)
+                kbRow.addView(btn, w)
+            }
+            layout.addView(kbRow)
+        }
 
         // Bias input row
         val biasRow = buttonRow()
@@ -322,6 +357,22 @@ class MainActivity : Activity() {
     private fun rowChildParams(weight: Float): LinearLayout.LayoutParams {
         return LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, weight).apply {
             setMargins(4, 8, 4, 8)
+        }
+    }
+
+    private fun onKbKey(key: String) {
+        val start = exprInput.selectionStart.coerceAtLeast(0)
+        val end = exprInput.selectionEnd.coerceAtLeast(0)
+        val editable = exprInput.text
+        if (key == "\u232B") { // backspace
+            if (start > 0 && start == end) editable.delete(start - 1, start)
+            else if (start != end) editable.delete(minOf(start, end), maxOf(start, end))
+        } else if (key == "\u2190") { // left
+            if (start > 0) exprInput.setSelection(start - 1)
+        } else if (key == "\u2192") { // right
+            if (end < editable.length) exprInput.setSelection(end + 1)
+        } else {
+            editable.replace(minOf(start, end), maxOf(start, end), key)
         }
     }
 
