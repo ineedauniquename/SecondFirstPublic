@@ -50,13 +50,14 @@ echo "=== Aligning ==="
 zipalign -f 4 "$BUILD_DIR/app-unsigned.apk" "$BUILD_DIR/app-aligned.apk"
 
 echo "=== Signing ==="
-if [ ! -f "$BUILD_DIR/debug.keystore" ]; then
-    keytool -genkeypair -v -keystore "$BUILD_DIR/debug.keystore" \
+KEYSTORE="$SCRIPT_DIR/.debug.keystore"
+if [ ! -f "$KEYSTORE" ]; then
+    keytool -genkeypair -v -keystore "$KEYSTORE" \
         -storepass android -keypass android -alias androiddebugkey \
         -keyalg RSA -keysize 2048 -validity 10000 \
         -dname "CN=Android Debug,O=Android,C=US"
 fi
-apksigner sign --ks "$BUILD_DIR/debug.keystore" --ks-pass pass:android \
+apksigner sign --ks "$KEYSTORE" --ks-pass pass:android \
     --ks-key-alias androiddebugkey --key-pass pass:android \
     --out "$SCRIPT_DIR/app-debug.apk" "$BUILD_DIR/app-aligned.apk"
 
