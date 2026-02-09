@@ -537,7 +537,7 @@ class MainActivity : Activity() {
     // --- Expression parser (recursive descent) ---
     private abstract class Expr
     private class ExprNum(val value: Float) : Expr()
-    private class ExprVar(val name: String) : Expr()
+    private class ExprVar(val name: String, val neighbor: Int) : Expr()
     private class ExprBinOp(val op: Char, val left: Expr, val right: Expr) : Expr()
     private class ExprNeg(val inner: Expr) : Expr()
 
@@ -573,14 +573,20 @@ class MainActivity : Activity() {
                 pos++; return inner
             }
             if (c == 'P' || c == 'p') {
-                if (pos + 1 < input.length && input[pos + 1] == '1') { pos += 2; return ExprVar("P1") }
-                if (pos + 1 < input.length && input[pos + 1] == '2') { pos += 2; return ExprVar("P2") }
+                if (pos + 1 < input.length && (input[pos + 1] == '1' || input[pos + 1] == '2')) {
+                    val name = "P${input[pos + 1]}"; pos += 2
+                    var nb = 0
+                    if (pos < input.length && input[pos] >= '1' && input[pos] <= '8') { nb = input[pos] - '0'; pos++ }
+                    return ExprVar(name, nb)
+                }
                 throw RuntimeException("Unknown var at pos $pos")
             }
             if (c == 'r' || c == 'g' || c == 'b' || c == 'R' || c == 'G' || c == 'B') {
                 if (pos + 1 < input.length && (input[pos + 1] == '1' || input[pos + 1] == '2')) {
-                    val name = "${c.lowercaseChar()}${input[pos + 1]}"
-                    pos += 2; return ExprVar(name)
+                    val name = "${c.lowercaseChar()}${input[pos + 1]}"; pos += 2
+                    var nb = 0
+                    if (pos < input.length && input[pos] >= '1' && input[pos] <= '8') { nb = input[pos] - '0'; pos++ }
+                    return ExprVar(name, nb)
                 }
                 throw RuntimeException("Expected r1/r2/g1/g2/b1/b2 at pos $pos")
             }
@@ -593,34 +599,43 @@ class MainActivity : Activity() {
         }
     }
 
+    // Neighbor offsets: 0=center, 1=top-left, 2=top, 3=top-right,
+    // 4=right, 5=bottom-right, 6=bottom, 7=bottom-left, 8=left
+    private val NDX = intArrayOf(0, -1, 0, 1, 1, 1, 0, -1, -1)
+    private val NDY = intArrayOf(0, -1, -1, -1, 0, 1, 1, 1, 0)
+
     private fun chVal(px: Int, ch: Int): Float {
         if (ch == 0) return ((px shr 16) and 0xFF).toFloat()
         if (ch == 1) return ((px shr 8) and 0xFF).toFloat()
         return (px and 0xFF).toFloat()
     }
 
-    private fun evalExpr(e: Expr, px1: Int, px2: Int, curCh: Int, divFlag: BooleanArray): Float {
+    private fun evalExpr(e: Expr, px1: IntArray, px2: IntArray, x: Int, y: Int, w: Int, h: Int, curCh: Int, divFlag: BooleanArray): Float {
         if (e is ExprNum) return e.value
         if (e is ExprVar) {
-            if (e.name == "P1") return chVal(px1, curCh)
-            if (e.name == "P2") return chVal(px2, curCh)
-            if (e.name == "r1") return chVal(px1, 0)
-            if (e.name == "g1") return chVal(px1, 1)
-            if (e.name == "b1") return chVal(px1, 2)
-            if (e.name == "r2") return chVal(px2, 0)
-            if (e.name == "g2") return chVal(px2, 1)
-            if (e.name == "b2") return chVal(px2, 2)
+            val nb = e.neighbor
+            val nx = (x + NDX[nb] + w) % w
+            val ny = (y + NDY[nb] + h) % h
+            val ni = ny * w + nx
+            if (e.name == "P1") return chVal(px1[ni], curCh)
+            if (e.name == "P2") return chVal(px2[ni], curCh)
+            if (e.name == "r1") return chVal(px1[ni], 0)
+            if (e.name == "g1") return chVal(px1[ni], 1)
+            if (e.name == "b1") return chVal(px1[ni], 2)
+            if (e.name == "r2") return chVal(px2[ni], 0)
+            if (e.name == "g2") return chVal(px2[ni], 1)
+            if (e.name == "b2") return chVal(px2[ni], 2)
             return 0f
         }
-        if (e is ExprNeg) return -evalExpr(e.inner, px1, px2, curCh, divFlag)
+        if (e is ExprNeg) return -evalExpr(e.inner, px1, px2, x, y, w, h, curCh, divFlag)
         if (e is ExprBinOp) {
-            val l = evalExpr(e.left, px1, px2, curCh, divFlag)
-            val r = evalExpr(e.right, px1, px2, curCh, divFlag)
+            val l = evalExpr(e.left, px1, px2, x, y, w, h, curCh, divFlag)
+            val r = evalExpr(e.right, px1, px2, x, y, w, h, curCh, divFlag)
             if (e.op == '+') return l + r
             if (e.op == '-') return l - r
             if (e.op == '*') return l * r
             if (e.op == '/') {
-                if (r == 0f) { divFlag[0] = true; return chVal(px1, curCh) }
+                if (r == 0f) { divFlag[0] = true; return chVal(px1[y * w + x], curCh) }
                 return l / r
             }
         }
@@ -716,10 +731,10 @@ class MainActivity : Activity() {
                 for (y in 0 until h) {
                     for (x in 0 until w) {
                         val i = y * w + x
-                        val p1 = px1[i]; val p2 = px2[i]
-                        val rr = if (chExprs[0] != null) evalExpr(chExprs[0]!!, p1, p2, 0, divFlag).toInt() and 0xFF else (p1 shr 16) and 0xFF
-                        val rg = if (chExprs[1] != null) evalExpr(chExprs[1]!!, p1, p2, 1, divFlag).toInt() and 0xFF else (p1 shr 8) and 0xFF
-                        val rb = if (chExprs[2] != null) evalExpr(chExprs[2]!!, p1, p2, 2, divFlag).toInt() and 0xFF else p1 and 0xFF
+                        val p1 = px1[i]
+                        val rr = if (chExprs[0] != null) evalExpr(chExprs[0]!!, px1, px2, x, y, w, h, 0, divFlag).toInt() and 0xFF else (p1 shr 16) and 0xFF
+                        val rg = if (chExprs[1] != null) evalExpr(chExprs[1]!!, px1, px2, x, y, w, h, 1, divFlag).toInt() and 0xFF else (p1 shr 8) and 0xFF
+                        val rb = if (chExprs[2] != null) evalExpr(chExprs[2]!!, px1, px2, x, y, w, h, 2, divFlag).toInt() and 0xFF else p1 and 0xFF
                         outPx[i] = (0xFF shl 24) or (rr shl 16) or (rg shl 8) or rb
                     }
                     if (y % 50 == 0) { val p = y; runOnUiThread { progressBar.progress = p } }
@@ -787,11 +802,10 @@ class MainActivity : Activity() {
 
                 for (y in 0 until h) {
                     for (x in 0 until w) {
+                        val rr = evalExpr(parsed, px1, px2, x, y, w, h, 0, divFlag).toInt() and 0xFF
+                        val rg = evalExpr(parsed, px1, px2, x, y, w, h, 1, divFlag).toInt() and 0xFF
+                        val rb = evalExpr(parsed, px1, px2, x, y, w, h, 2, divFlag).toInt() and 0xFF
                         val i = y * w + x
-                        val p1 = px1[i]; val p2 = px2[i]
-                        val rr = evalExpr(parsed, p1, p2, 0, divFlag).toInt() and 0xFF
-                        val rg = evalExpr(parsed, p1, p2, 1, divFlag).toInt() and 0xFF
-                        val rb = evalExpr(parsed, p1, p2, 2, divFlag).toInt() and 0xFF
                         outPx[i] = (0xFF shl 24) or (rr shl 16) or (rg shl 8) or rb
                     }
                     if (y % 50 == 0) { val p = y; runOnUiThread { progressBar.progress = p } }
