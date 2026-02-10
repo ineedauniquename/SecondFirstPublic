@@ -948,10 +948,9 @@ class MainActivity : Activity() {
                     for (y in 0 until h) {
                         for (x in 0 until w) {
                             val i = y * w + x
-                            val p1 = px1[i]
-                            val rr = if (chExprs[0] != null) evalExpr(chExprs[0]!!, px1, px2, x, y, w, h, 0, divFlag).toInt() and 0xFF else (p1 shr 16) and 0xFF
-                            val rg = if (chExprs[1] != null) evalExpr(chExprs[1]!!, px1, px2, x, y, w, h, 1, divFlag).toInt() and 0xFF else (p1 shr 8) and 0xFF
-                            val rb = if (chExprs[2] != null) evalExpr(chExprs[2]!!, px1, px2, x, y, w, h, 2, divFlag).toInt() and 0xFF else p1 and 0xFF
+                            val rr = if (chExprs[0] != null) evalExpr(chExprs[0]!!, px1, px2, x, y, w, h, 0, divFlag).toInt() and 0xFF else 0
+                            val rg = if (chExprs[1] != null) evalExpr(chExprs[1]!!, px1, px2, x, y, w, h, 1, divFlag).toInt() and 0xFF else 0
+                            val rb = if (chExprs[2] != null) evalExpr(chExprs[2]!!, px1, px2, x, y, w, h, 2, divFlag).toInt() and 0xFF else 0
                             outPx[i] = (0xFF shl 24) or (rr shl 16) or (rg shl 8) or rb
                         }
                         if (y % 50 == 0) { val p = y; runOnUiThread { progressBar.progress = p } }
