@@ -217,7 +217,7 @@ class MainActivity : Activity() {
             arrayOf("9", "0", ".", "\u232B"),
             arrayOf("(", ")", "[", "]"),
             arrayOf("+", "-", "*", "/"),
-            arrayOf(" ", ",", "avg(", "")
+            arrayOf(" ", ",", "avg(", "repeat(")
         )
         for (row in kbKeys) {
             val kbRow = LinearLayout(this).apply {
@@ -229,7 +229,7 @@ class MainActivity : Activity() {
             }
             for (key in row) {
                 val btn = Button(this).apply {
-                    text = if (key == " ") "SP" else if (key == ",") "," else key
+                    text = if (key == " ") "SP" else if (key == "repeat(") "rpt(" else key
                     setTextColor(if (key.isEmpty()) Color.TRANSPARENT else Color.WHITE)
                     setBackgroundColor(if (key.isEmpty()) Color.parseColor("#1C1B1F") else Color.parseColor("#3A3A3A"))
                     textSize = 14f
@@ -832,10 +832,25 @@ class MainActivity : Activity() {
         if (isProcessing) return
         val bmp1 = bitmap1
         val bmp2 = bitmap2
-        val exprStr = exprInput.text.toString().trim()
+        var exprStr = exprInput.text.toString().trim()
         if (exprStr.isEmpty()) {
             Toast.makeText(this, "Enter an expression", Toast.LENGTH_SHORT).show()
             return
+        }
+
+        // Detect repeat(expr, N) wrapper
+        var repeatCount = 1
+        if (exprStr.startsWith("repeat(", ignoreCase = true) && exprStr.endsWith(")")) {
+            val inner = exprStr.substring(7, exprStr.length - 1)
+            val lastComma = inner.lastIndexOf(',')
+            if (lastComma >= 0) {
+                val countStr = inner.substring(lastComma + 1).trim()
+                val count = countStr.toIntOrNull()
+                if (count != null && count >= 1) {
+                    repeatCount = count
+                    exprStr = inner.substring(0, lastComma).trim()
+                }
+            }
         }
 
         val isPerChannel = exprStr.contains('[')
@@ -877,28 +892,36 @@ class MainActivity : Activity() {
                 s1.getPixels(px1, 0, w, 0, 0, w, h)
                 s2?.getPixels(px2, 0, w, 0, 0, w, h)
 
-                runOnUiThread { statusText.text = "Precomputing avg..." }
-                buildAvgCacheForChannels(chExprs, px1, px2, w, h)
-                if (avgError != null) {
-                    val err = avgError!!
-                    runOnUiThread { statusText.text = err; progressBar.visibility = View.GONE; isProcessing = false; updateButtons() }
-                    return@Thread
-                }
-
                 val outPx = IntArray(w * h)
                 val divFlag = booleanArrayOf(false)
-                runOnUiThread { progressBar.max = h; statusText.text = "Processing pixels..." }
 
-                for (y in 0 until h) {
-                    for (x in 0 until w) {
-                        val i = y * w + x
-                        val p1 = px1[i]
-                        val rr = if (chExprs[0] != null) evalExpr(chExprs[0]!!, px1, px2, x, y, w, h, 0, divFlag).toInt() and 0xFF else (p1 shr 16) and 0xFF
-                        val rg = if (chExprs[1] != null) evalExpr(chExprs[1]!!, px1, px2, x, y, w, h, 1, divFlag).toInt() and 0xFF else (p1 shr 8) and 0xFF
-                        val rb = if (chExprs[2] != null) evalExpr(chExprs[2]!!, px1, px2, x, y, w, h, 2, divFlag).toInt() and 0xFF else p1 and 0xFF
-                        outPx[i] = (0xFF shl 24) or (rr shl 16) or (rg shl 8) or rb
+                for (iter in 0 until repeatCount) {
+                    val iterLabel = if (repeatCount > 1) " (${iter+1}/$repeatCount)" else ""
+                    runOnUiThread { statusText.text = "Precomputing avg$iterLabel..." }
+                    buildAvgCacheForChannels(chExprs, px1, px2, w, h)
+                    if (avgError != null) {
+                        val err = avgError!!
+                        runOnUiThread { statusText.text = err; progressBar.visibility = View.GONE; isProcessing = false; updateButtons() }
+                        return@Thread
                     }
-                    if (y % 50 == 0) { val p = y; runOnUiThread { progressBar.progress = p } }
+
+                    runOnUiThread { progressBar.max = h; statusText.text = "Processing pixels$iterLabel..." }
+
+                    for (y in 0 until h) {
+                        for (x in 0 until w) {
+                            val i = y * w + x
+                            val p1 = px1[i]
+                            val rr = if (chExprs[0] != null) evalExpr(chExprs[0]!!, px1, px2, x, y, w, h, 0, divFlag).toInt() and 0xFF else (p1 shr 16) and 0xFF
+                            val rg = if (chExprs[1] != null) evalExpr(chExprs[1]!!, px1, px2, x, y, w, h, 1, divFlag).toInt() and 0xFF else (p1 shr 8) and 0xFF
+                            val rb = if (chExprs[2] != null) evalExpr(chExprs[2]!!, px1, px2, x, y, w, h, 2, divFlag).toInt() and 0xFF else p1 and 0xFF
+                            outPx[i] = (0xFF shl 24) or (rr shl 16) or (rg shl 8) or rb
+                        }
+                        if (y % 50 == 0) { val p = y; runOnUiThread { progressBar.progress = p } }
+                    }
+
+                    if (iter < repeatCount - 1) {
+                        System.arraycopy(outPx, 0, px1, 0, w * h)
+                    }
                 }
 
                 if (s1 !== bmp1) s1.recycle()
@@ -961,27 +984,35 @@ class MainActivity : Activity() {
                 s1?.getPixels(px1, 0, w, 0, 0, w, h)
                 s2?.getPixels(px2, 0, w, 0, 0, w, h)
 
-                runOnUiThread { statusText.text = "Precomputing avg..." }
-                buildAvgCache(parsed, px1, px2, w, h)
-                if (avgError != null) {
-                    val err = avgError!!
-                    runOnUiThread { statusText.text = err; progressBar.visibility = View.GONE; isProcessing = false; updateButtons() }
-                    return@Thread
-                }
-
                 val outPx = IntArray(w * h)
                 val divFlag = booleanArrayOf(false)
-                runOnUiThread { progressBar.max = h; statusText.text = "Processing pixels..." }
 
-                for (y in 0 until h) {
-                    for (x in 0 until w) {
-                        val rr = evalExpr(parsed, px1, px2, x, y, w, h, 0, divFlag).toInt() and 0xFF
-                        val rg = evalExpr(parsed, px1, px2, x, y, w, h, 1, divFlag).toInt() and 0xFF
-                        val rb = evalExpr(parsed, px1, px2, x, y, w, h, 2, divFlag).toInt() and 0xFF
-                        val i = y * w + x
-                        outPx[i] = (0xFF shl 24) or (rr shl 16) or (rg shl 8) or rb
+                for (iter in 0 until repeatCount) {
+                    val iterLabel = if (repeatCount > 1) " (${iter+1}/$repeatCount)" else ""
+                    runOnUiThread { statusText.text = "Precomputing avg$iterLabel..." }
+                    buildAvgCache(parsed, px1, px2, w, h)
+                    if (avgError != null) {
+                        val err = avgError!!
+                        runOnUiThread { statusText.text = err; progressBar.visibility = View.GONE; isProcessing = false; updateButtons() }
+                        return@Thread
                     }
-                    if (y % 50 == 0) { val p = y; runOnUiThread { progressBar.progress = p } }
+
+                    runOnUiThread { progressBar.max = h; statusText.text = "Processing pixels$iterLabel..." }
+
+                    for (y in 0 until h) {
+                        for (x in 0 until w) {
+                            val rr = evalExpr(parsed, px1, px2, x, y, w, h, 0, divFlag).toInt() and 0xFF
+                            val rg = evalExpr(parsed, px1, px2, x, y, w, h, 1, divFlag).toInt() and 0xFF
+                            val rb = evalExpr(parsed, px1, px2, x, y, w, h, 2, divFlag).toInt() and 0xFF
+                            val i = y * w + x
+                            outPx[i] = (0xFF shl 24) or (rr shl 16) or (rg shl 8) or rb
+                        }
+                        if (y % 50 == 0) { val p = y; runOnUiThread { progressBar.progress = p } }
+                    }
+
+                    if (iter < repeatCount - 1) {
+                        System.arraycopy(outPx, 0, px1, 0, w * h)
+                    }
                 }
 
                 if (s1 != null && s1 !== bmp1) s1.recycle()
