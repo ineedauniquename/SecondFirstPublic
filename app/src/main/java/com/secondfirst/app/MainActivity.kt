@@ -45,8 +45,12 @@ class MainActivity : Activity() {
     private lateinit var progressBar: ProgressBar
     private lateinit var fullscreenOverlay: FrameLayout
     private lateinit var fullscreenImage: ImageView
-    private lateinit var exprInput: EditText
+    private lateinit var exprRGB: EditText
+    private lateinit var exprR: EditText
+    private lateinit var exprG: EditText
+    private lateinit var exprB: EditText
     private lateinit var btnApplyExpr: Button
+    private lateinit var btnPaste: Button
 
     private var bitmap1: Bitmap? = null
     private var bitmap2: Bitmap? = null
@@ -188,26 +192,55 @@ class MainActivity : Activity() {
         rowBrightness.addView(btnDarken, rowChildParams(1f))
         layout.addView(rowBrightness)
 
-        // Expression input row
-        val exprRow = buttonRow()
-        exprInput = EditText(this).apply {
-            setText("P1*P2/255")
-            setTextColor(Color.WHITE)
-            setBackgroundColor(Color.parseColor("#2D2D30"))
-            inputType = InputType.TYPE_CLASS_TEXT
-            setPadding(24, 16, 24, 16)
-            textSize = 14f
-            setSingleLine(true)
-            showSoftInputOnFocus = false
+        // Expression input boxes: RGB (main) + R, G, B (overrides)
+        fun exprEditText(default: String): EditText {
+            return EditText(this).apply {
+                setText(default)
+                setTextColor(Color.WHITE)
+                setBackgroundColor(Color.parseColor("#2D2D30"))
+                inputType = InputType.TYPE_CLASS_TEXT
+                setPadding(24, 12, 24, 12)
+                textSize = 14f
+                setSingleLine(true)
+                showSoftInputOnFocus = false
+            }
         }
+        fun exprLabelRow(label: String, edit: EditText): LinearLayout {
+            val row = buttonRow()
+            val lbl = TextView(this).apply {
+                text = label
+                textSize = 14f
+                setTextColor(Color.parseColor("#D0BCFF"))
+                setPadding(8, 0, 8, 0)
+                setGravity(Gravity.CENTER_VERTICAL)
+            }
+            row.addView(lbl, rowChildParams(0.6f))
+            row.addView(edit, rowChildParams(3.4f))
+            return row
+        }
+        exprRGB = exprEditText("P1")
+        exprR = exprEditText("")
+        exprG = exprEditText("")
+        exprB = exprEditText("")
+        layout.addView(exprLabelRow("RGB:", exprRGB))
+        layout.addView(exprLabelRow("R:", exprR))
+        layout.addView(exprLabelRow("G:", exprG))
+        layout.addView(exprLabelRow("B:", exprB))
+
+        // Apply and Paste buttons
+        val exprBtnRow = buttonRow()
         btnApplyExpr = styledButton("Apply Expr").apply {
             setBackgroundColor(Color.parseColor("#7B5EA7"))
             isEnabled = false
         }
         btnApplyExpr.setOnClickListener { applyExpression() }
-        exprRow.addView(exprInput, rowChildParams(3f))
-        exprRow.addView(btnApplyExpr, rowChildParams(1f))
-        layout.addView(exprRow)
+        btnPaste = styledButton("Paste").apply {
+            setBackgroundColor(Color.parseColor("#4A4458"))
+        }
+        btnPaste.setOnClickListener { pasteFormula() }
+        exprBtnRow.addView(btnApplyExpr, rowChildParams(2f))
+        exprBtnRow.addView(btnPaste, rowChildParams(1f))
+        layout.addView(exprBtnRow)
 
         // Custom keyboard for formula input
         val kbKeys = arrayOf(
@@ -215,7 +248,7 @@ class MainActivity : Activity() {
             arrayOf("1", "2", "3", "4"),
             arrayOf("5", "6", "7", "8"),
             arrayOf("9", "0", ".", "\u232B"),
-            arrayOf("(", ")", "[", "]"),
+            arrayOf("(", ")", "P1", "P2"),
             arrayOf("+", "-", "*", "/"),
             arrayOf(" ", ",", "avg(", "repeat(")
         )
@@ -230,17 +263,16 @@ class MainActivity : Activity() {
             for (key in row) {
                 val btn = Button(this).apply {
                     text = if (key == " ") "SP" else if (key == "repeat(") "rpt(" else key
-                    setTextColor(if (key.isEmpty()) Color.TRANSPARENT else Color.WHITE)
-                    setBackgroundColor(if (key.isEmpty()) Color.parseColor("#1C1B1F") else Color.parseColor("#3A3A3A"))
+                    setTextColor(Color.WHITE)
+                    setBackgroundColor(Color.parseColor("#3A3A3A"))
                     textSize = 14f
                     setPadding(0, 5, 0, 5)
                     minimumWidth = 0
                     minWidth = 0
                     minimumHeight = 0
                     minHeight = 0
-                    isEnabled = key.isNotEmpty()
                 }
-                if (key.isNotEmpty()) btn.setOnClickListener { onKbKey(key) }
+                btn.setOnClickListener { onKbKey(key) }
                 val w = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
                 w.setMargins(2, 2, 2, 2)
                 kbRow.addView(btn, w)
@@ -380,18 +412,38 @@ class MainActivity : Activity() {
     }
 
     private fun onKbKey(key: String) {
-        val start = exprInput.selectionStart.coerceAtLeast(0)
-        val end = exprInput.selectionEnd.coerceAtLeast(0)
-        val editable = exprInput.text
+        val target = if (exprR.hasFocus()) exprR
+                     else if (exprG.hasFocus()) exprG
+                     else if (exprB.hasFocus()) exprB
+                     else exprRGB
+        val start = target.selectionStart.coerceAtLeast(0)
+        val end = target.selectionEnd.coerceAtLeast(0)
+        val editable = target.text
         if (key == "\u232B") { // backspace
             if (start > 0 && start == end) editable.delete(start - 1, start)
             else if (start != end) editable.delete(minOf(start, end), maxOf(start, end))
         } else if (key == "\u2190") { // left
-            if (start > 0) exprInput.setSelection(start - 1)
+            if (start > 0) target.setSelection(start - 1)
         } else if (key == "\u2192") { // right
-            if (end < editable.length) exprInput.setSelection(end + 1)
+            if (end < editable.length) target.setSelection(end + 1)
         } else {
             editable.replace(minOf(start, end), maxOf(start, end), key)
+        }
+    }
+
+    private fun pasteFormula() {
+        val clipMgr = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        val clip = clipMgr.primaryClip ?: return
+        if (clip.itemCount == 0) return
+        val text = clip.getItemAt(0).text?.toString() ?: return
+        val parts = text.split("|")
+        if (parts.size == 4) {
+            exprRGB.setText(parts[0])
+            exprR.setText(parts[1])
+            exprG.setText(parts[2])
+            exprB.setText(parts[3])
+        } else {
+            exprRGB.setText(text)
         }
     }
 
@@ -614,27 +666,6 @@ class MainActivity : Activity() {
         if (e is ExprBinOp) { collectAvgParams(e.left, result); collectAvgParams(e.right, result) }
     }
 
-    // Precompute all avg lookups needed by the expression
-    private fun buildAvgCache(expr: Expr, px1: IntArray, px2: IntArray, w: Int, h: Int) {
-        val params = mutableSetOf<Pair<Int, Int>>()
-        collectAvgParams(expr, params)
-        avgCache.clear()
-        avgError = null
-        if (params.isEmpty()) return
-        try {
-            val hpass = FloatArray(w * h)
-            for ((img, rad) in params) {
-                val pxArr = if (img == 1) px1 else px2
-                for (ch in 0..2) {
-                    avgCache[avgKey(ch, img, rad)] = precomputeBoxBlur(pxArr, w, h, ch, rad, hpass)
-                }
-            }
-        } catch (e: OutOfMemoryError) {
-            avgCache.clear()
-            avgError = "Out of memory computing avg - try smaller image or radius"
-        }
-    }
-
     private fun buildAvgCacheForChannels(exprs: Array<Expr?>, px1: IntArray, px2: IntArray, w: Int, h: Int) {
         val params = mutableSetOf<Pair<Int, Int>>()
         for (e in exprs) if (e != null) collectAvgParams(e, params)
@@ -835,247 +866,146 @@ class MainActivity : Activity() {
         return false
     }
 
-    // Parse "[r expr] [g expr] [b expr]" syntax
-    private fun parseChannelExprs(input: String): Array<Expr?> {
-        val result = arrayOfNulls<Expr>(3) // 0=R, 1=G, 2=B
-        var pos = 0
-        val s = input.trim()
-        while (pos < s.length) {
-            while (pos < s.length && s[pos] == ' ') pos++
-            if (pos >= s.length) break
-            if (s[pos] != '[') throw RuntimeException("Expected '[' at pos $pos")
-            pos++
-            while (pos < s.length && s[pos] == ' ') pos++
-            if (pos >= s.length) throw RuntimeException("Expected channel after '['")
-            val ch = s[pos].lowercaseChar()
-            if (ch != 'r' && ch != 'g' && ch != 'b') throw RuntimeException("Expected r/g/b after '[', got '${s[pos]}'")
-            pos++
-            val end = s.indexOf(']', pos)
-            if (end < 0) throw RuntimeException("Missing ']'")
-            val exprStr = s.substring(pos, end).trim()
-            val expr = ExprParser(exprStr).parse()
-            if (ch == 'r') result[0] = expr
-            else if (ch == 'g') result[1] = expr
-            else result[2] = expr
-            pos = end + 1
-        }
-        return result
-    }
-
     private fun applyExpression() {
         if (isProcessing) return
         val bmp1 = bitmap1
         val bmp2 = bitmap2
-        var exprStr = exprInput.text.toString().trim()
-        if (exprStr.isEmpty()) {
+        var rgbStr = exprRGB.text.toString().trim()
+        val rStr = exprR.text.toString().trim()
+        val gStr = exprG.text.toString().trim()
+        val bStr = exprB.text.toString().trim()
+
+        if (rgbStr.isEmpty() && rStr.isEmpty() && gStr.isEmpty() && bStr.isEmpty()) {
             Toast.makeText(this, "Enter an expression", Toast.LENGTH_SHORT).show()
             return
         }
 
-        // Copy formula to clipboard
+        // Copy all 4 boxes to clipboard as pipe-separated
         val clipMgr = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
-        clipMgr.setPrimaryClip(android.content.ClipData.newPlainText("formula", exprStr))
+        clipMgr.setPrimaryClip(android.content.ClipData.newPlainText("formula", "$rgbStr|$rStr|$gStr|$bStr"))
 
-        // Detect repeat(expr, N) wrapper
+        // Detect repeat(expr, N) in RGB box
         var repeatCount = 1
-        if (exprStr.startsWith("repeat(", ignoreCase = true) && exprStr.endsWith(")")) {
-            val inner = exprStr.substring(7, exprStr.length - 1)
+        if (rgbStr.startsWith("repeat(", ignoreCase = true) && rgbStr.endsWith(")")) {
+            val inner = rgbStr.substring(7, rgbStr.length - 1)
             val lastComma = inner.lastIndexOf(',')
             if (lastComma >= 0) {
                 val countStr = inner.substring(lastComma + 1).trim()
                 val count = countStr.toIntOrNull()
                 if (count != null && count >= 1) {
                     repeatCount = count
-                    exprStr = inner.substring(0, lastComma).trim()
+                    rgbStr = inner.substring(0, lastComma).trim()
                 }
             }
         }
 
-        val isPerChannel = exprStr.contains('[')
+        // Parse expressions
+        val rgbExpr: Expr? = if (rgbStr.isNotEmpty()) {
+            try { ExprParser(rgbStr).parse() }
+            catch (ex: Exception) { Toast.makeText(this, "RGB: ${ex.message}", Toast.LENGTH_LONG).show(); return }
+        } else null
+        val rExpr: Expr? = if (rStr.isNotEmpty()) {
+            try { ExprParser(rStr).parse() }
+            catch (ex: Exception) { Toast.makeText(this, "R: ${ex.message}", Toast.LENGTH_LONG).show(); return }
+        } else null
+        val gExpr: Expr? = if (gStr.isNotEmpty()) {
+            try { ExprParser(gStr).parse() }
+            catch (ex: Exception) { Toast.makeText(this, "G: ${ex.message}", Toast.LENGTH_LONG).show(); return }
+        } else null
+        val bExpr: Expr? = if (bStr.isNotEmpty()) {
+            try { ExprParser(bStr).parse() }
+            catch (ex: Exception) { Toast.makeText(this, "B: ${ex.message}", Toast.LENGTH_LONG).show(); return }
+        } else null
 
-        // Per-channel mode: [r expr] [g expr] [b expr]
-        if (isPerChannel) {
-            val chExprs: Array<Expr?>
-            try { chExprs = parseChannelExprs(exprStr) }
-            catch (ex: Exception) {
-                Toast.makeText(this, "Parse error: ${ex.message}", Toast.LENGTH_LONG).show()
-                return
-            }
-            if (bmp1 == null) {
-                Toast.makeText(this, "Image 1 required for per-channel mode", Toast.LENGTH_SHORT).show()
-                return
-            }
-            // Check if any channel expr needs image 2
-            val needsImg2 = (0..2).any { chExprs[it] != null && exprUsesImg2(chExprs[it]!!) }
-            if (needsImg2 && bmp2 == null) {
-                Toast.makeText(this, "Expression uses Image 2 but it's not loaded", Toast.LENGTH_SHORT).show()
-                return
-            }
+        // Effective expression per channel: individual overrides RGB, fallback to 0
+        val effR = rExpr ?: rgbExpr ?: ExprNum(0f)
+        val effG = gExpr ?: rgbExpr ?: ExprNum(0f)
+        val effB = bExpr ?: rgbExpr ?: ExprNum(0f)
 
-            isProcessing = true
-            updateButtons()
-            progressBar.visibility = View.VISIBLE
-            progressBar.progress = 0
-            statusText.text = "Applying: $exprStr"
-
-            Thread {
-                val t0 = System.currentTimeMillis()
-                val w: Int; val h: Int
-                if (bmp2 != null) { w = minOf(bmp1.width, bmp2.width); h = minOf(bmp1.height, bmp2.height) }
-                else { w = bmp1.width; h = bmp1.height }
-
-                val s1 = Bitmap.createScaledBitmap(bmp1, w, h, true)
-                val s2 = if (bmp2 != null) Bitmap.createScaledBitmap(bmp2, w, h, true) else null
-                val px1 = IntArray(w * h); val px2 = IntArray(w * h)
-                s1.getPixels(px1, 0, w, 0, 0, w, h)
-                s2?.getPixels(px2, 0, w, 0, 0, w, h)
-
-                val outPx = IntArray(w * h)
-                val divFlag = booleanArrayOf(false)
-
-                for (iter in 0 until repeatCount) {
-                    val iterLabel = if (repeatCount > 1) " (${iter+1}/$repeatCount)" else ""
-                    runOnUiThread { statusText.text = "Precomputing avg$iterLabel..." }
-                    buildAvgCacheForChannels(chExprs, px1, px2, w, h)
-                    if (avgError != null) {
-                        val err = avgError!!
-                        runOnUiThread { statusText.text = err; progressBar.visibility = View.GONE; isProcessing = false; updateButtons() }
-                        return@Thread
-                    }
-
-                    runOnUiThread { progressBar.max = h; statusText.text = "Processing pixels$iterLabel..." }
-
-                    for (y in 0 until h) {
-                        for (x in 0 until w) {
-                            val i = y * w + x
-                            val rr = if (chExprs[0] != null) evalExpr(chExprs[0]!!, px1, px2, x, y, w, h, 0, divFlag).toInt() and 0xFF else 0
-                            val rg = if (chExprs[1] != null) evalExpr(chExprs[1]!!, px1, px2, x, y, w, h, 1, divFlag).toInt() and 0xFF else 0
-                            val rb = if (chExprs[2] != null) evalExpr(chExprs[2]!!, px1, px2, x, y, w, h, 2, divFlag).toInt() and 0xFF else 0
-                            outPx[i] = (0xFF shl 24) or (rr shl 16) or (rg shl 8) or rb
-                        }
-                        if (y % 50 == 0) { val p = y; runOnUiThread { progressBar.progress = p } }
-                    }
-
-                    if (iter < repeatCount - 1) {
-                        System.arraycopy(outPx, 0, px1, 0, w * h)
-                    }
-                }
-
-                if (s1 !== bmp1) s1.recycle()
-                if (s2 != null && s2 !== bmp2) s2.recycle()
-                avgCache.clear()
-                val result = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-                result.setPixels(outPx, 0, w, 0, 0, w, h)
-
-                val bias = getBias()
-                val biased = if (bias != 1.0f) applyBias(result, bmp1, bias) else result
-                if (biased !== result) result.recycle()
-                val hadDivZero = divFlag[0]
-                val elapsed = (System.currentTimeMillis() - t0) / 1000f
-
-                runOnUiThread {
-                    resultBitmap = biased
-                    previewResult.setImageBitmap(biased)
-                    progressBar.visibility = View.GONE
-                    val biasStr = if (bias != 1.0f) " bias=$bias" else ""
-                    val divStr = if (hadDivZero) " [div/0: used img1]" else ""
-                    statusText.text = "Done ${w}x${h} ${elapsed}s$biasStr$divStr"
-                    isProcessing = false
-                    updateButtons()
-                }
-            }.start()
-        } else {
-            // All-channels mode: P1*P2/255 etc.
-            val parsed: Expr
-            try { parsed = ExprParser(exprStr).parse() }
-            catch (ex: Exception) {
-                Toast.makeText(this, "Parse error: ${ex.message}", Toast.LENGTH_LONG).show()
-                return
-            }
-            val needsImg2 = exprUsesImg2(parsed)
-            if (bmp1 == null && bmp2 == null) {
-                Toast.makeText(this, "Load at least one image", Toast.LENGTH_SHORT).show()
-                return
-            }
-            if (needsImg2 && bmp2 == null) {
-                Toast.makeText(this, "Expression uses Image 2 but it's not loaded", Toast.LENGTH_SHORT).show()
-                return
-            }
-
-            isProcessing = true
-            updateButtons()
-            progressBar.visibility = View.VISIBLE
-            progressBar.progress = 0
-            statusText.text = "Applying: $exprStr"
-
-            Thread {
-                val t0 = System.currentTimeMillis()
-                val w: Int; val h: Int
-                if (bmp1 != null && bmp2 != null) { w = minOf(bmp1.width, bmp2.width); h = minOf(bmp1.height, bmp2.height) }
-                else if (bmp1 != null) { w = bmp1.width; h = bmp1.height }
-                else { w = bmp2!!.width; h = bmp2.height }
-
-                val s1 = if (bmp1 != null) Bitmap.createScaledBitmap(bmp1, w, h, true) else null
-                val s2 = if (bmp2 != null) Bitmap.createScaledBitmap(bmp2, w, h, true) else null
-                val px1 = IntArray(w * h); val px2 = IntArray(w * h)
-                s1?.getPixels(px1, 0, w, 0, 0, w, h)
-                s2?.getPixels(px2, 0, w, 0, 0, w, h)
-
-                val outPx = IntArray(w * h)
-                val divFlag = booleanArrayOf(false)
-
-                for (iter in 0 until repeatCount) {
-                    val iterLabel = if (repeatCount > 1) " (${iter+1}/$repeatCount)" else ""
-                    runOnUiThread { statusText.text = "Precomputing avg$iterLabel..." }
-                    buildAvgCache(parsed, px1, px2, w, h)
-                    if (avgError != null) {
-                        val err = avgError!!
-                        runOnUiThread { statusText.text = err; progressBar.visibility = View.GONE; isProcessing = false; updateButtons() }
-                        return@Thread
-                    }
-
-                    runOnUiThread { progressBar.max = h; statusText.text = "Processing pixels$iterLabel..." }
-
-                    for (y in 0 until h) {
-                        for (x in 0 until w) {
-                            val rr = evalExpr(parsed, px1, px2, x, y, w, h, 0, divFlag).toInt() and 0xFF
-                            val rg = evalExpr(parsed, px1, px2, x, y, w, h, 1, divFlag).toInt() and 0xFF
-                            val rb = evalExpr(parsed, px1, px2, x, y, w, h, 2, divFlag).toInt() and 0xFF
-                            val i = y * w + x
-                            outPx[i] = (0xFF shl 24) or (rr shl 16) or (rg shl 8) or rb
-                        }
-                        if (y % 50 == 0) { val p = y; runOnUiThread { progressBar.progress = p } }
-                    }
-
-                    if (iter < repeatCount - 1) {
-                        System.arraycopy(outPx, 0, px1, 0, w * h)
-                    }
-                }
-
-                if (s1 != null && s1 !== bmp1) s1.recycle()
-                if (s2 != null && s2 !== bmp2) s2.recycle()
-                avgCache.clear()
-                val result = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-                result.setPixels(outPx, 0, w, 0, 0, w, h)
-
-                val bias = getBias()
-                val biased = if (bias != 1.0f && bmp1 != null) applyBias(result, bmp1, bias) else result
-                if (biased !== result) result.recycle()
-                val hadDivZero = divFlag[0]
-                val elapsed = (System.currentTimeMillis() - t0) / 1000f
-
-                runOnUiThread {
-                    resultBitmap = biased
-                    previewResult.setImageBitmap(biased)
-                    progressBar.visibility = View.GONE
-                    val biasStr = if (bias != 1.0f && bmp1 != null) " bias=$bias" else ""
-                    val divStr = if (hadDivZero) " [div/0: used img1]" else ""
-                    statusText.text = "Done ${w}x${h} ${elapsed}s$biasStr$divStr"
-                    isProcessing = false
-                    updateButtons()
-                }
-            }.start()
+        val needsImg2 = exprUsesImg2(effR) || exprUsesImg2(effG) || exprUsesImg2(effB)
+        if (bmp1 == null && bmp2 == null) {
+            Toast.makeText(this, "Load at least one image", Toast.LENGTH_SHORT).show()
+            return
         }
+        if (needsImg2 && bmp2 == null) {
+            Toast.makeText(this, "Expression uses Image 2 but it's not loaded", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        isProcessing = true
+        updateButtons()
+        progressBar.visibility = View.VISIBLE
+        progressBar.progress = 0
+        statusText.text = "Applying expression..."
+
+        Thread {
+            val t0 = System.currentTimeMillis()
+            val w: Int; val h: Int
+            if (bmp1 != null && bmp2 != null) { w = minOf(bmp1.width, bmp2.width); h = minOf(bmp1.height, bmp2.height) }
+            else if (bmp1 != null) { w = bmp1.width; h = bmp1.height }
+            else { w = bmp2!!.width; h = bmp2.height }
+
+            val s1 = if (bmp1 != null) Bitmap.createScaledBitmap(bmp1, w, h, true) else null
+            val s2 = if (bmp2 != null) Bitmap.createScaledBitmap(bmp2, w, h, true) else null
+            val px1 = IntArray(w * h); val px2 = IntArray(w * h)
+            s1?.getPixels(px1, 0, w, 0, 0, w, h)
+            s2?.getPixels(px2, 0, w, 0, 0, w, h)
+
+            val outPx = IntArray(w * h)
+            val divFlag = booleanArrayOf(false)
+            val chExprs = arrayOf<Expr?>(effR, effG, effB)
+
+            for (iter in 0 until repeatCount) {
+                val iterLabel = if (repeatCount > 1) " (${iter+1}/$repeatCount)" else ""
+                runOnUiThread { statusText.text = "Precomputing avg$iterLabel..." }
+                buildAvgCacheForChannels(chExprs, px1, px2, w, h)
+                if (avgError != null) {
+                    val err = avgError!!
+                    runOnUiThread { statusText.text = err; progressBar.visibility = View.GONE; isProcessing = false; updateButtons() }
+                    return@Thread
+                }
+
+                runOnUiThread { progressBar.max = h; statusText.text = "Processing pixels$iterLabel..." }
+
+                for (y in 0 until h) {
+                    for (x in 0 until w) {
+                        val rr = evalExpr(effR, px1, px2, x, y, w, h, 0, divFlag).toInt() and 0xFF
+                        val rg = evalExpr(effG, px1, px2, x, y, w, h, 1, divFlag).toInt() and 0xFF
+                        val rb = evalExpr(effB, px1, px2, x, y, w, h, 2, divFlag).toInt() and 0xFF
+                        val i = y * w + x
+                        outPx[i] = (0xFF shl 24) or (rr shl 16) or (rg shl 8) or rb
+                    }
+                    if (y % 50 == 0) { val p = y; runOnUiThread { progressBar.progress = p } }
+                }
+
+                if (iter < repeatCount - 1) {
+                    System.arraycopy(outPx, 0, px1, 0, w * h)
+                }
+            }
+
+            if (s1 != null && s1 !== bmp1) s1.recycle()
+            if (s2 != null && s2 !== bmp2) s2.recycle()
+            avgCache.clear()
+            val result = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            result.setPixels(outPx, 0, w, 0, 0, w, h)
+
+            val bias = getBias()
+            val biased = if (bias != 1.0f && bmp1 != null) applyBias(result, bmp1, bias) else result
+            if (biased !== result) result.recycle()
+            val hadDivZero = divFlag[0]
+            val elapsed = (System.currentTimeMillis() - t0) / 1000f
+
+            runOnUiThread {
+                resultBitmap = biased
+                previewResult.setImageBitmap(biased)
+                progressBar.visibility = View.GONE
+                val biasStr = if (bias != 1.0f && bmp1 != null) " bias=$bias" else ""
+                val divStr = if (hadDivZero) " [div/0: used img1]" else ""
+                statusText.text = "Done ${w}x${h} ${elapsed}s$biasStr$divStr"
+                isProcessing = false
+                updateButtons()
+            }
+        }.start()
     }
 
     private fun saveResult() {
