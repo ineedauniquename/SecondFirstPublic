@@ -570,7 +570,73 @@ class MainActivity : Activity() {
         return result
     }
 
-    // --- Expression parser (recursive descent) ---
+    // Precomputed avg cache: key = ch*100000 + img*10000 + radius -> FloatArray
+    private var avgCache = HashMap<Int, FloatArray>()
+
+    private fun avgKey(ch: Int, img: Int, radius: Int): Int = ch * 100000 + img * 10000 + radius
+
+    // Separable box filter with toroidal wrapping - O(w*h) regardless of radius
+    private fun precomputeBoxBlur(pixels: IntArray, w: Int, h: Int, ch: Int, radius: Int): FloatArray {
+        val size = 2 * radius + 1
+        val total = size.toLong() * size.toLong()
+        val hpass = FloatArray(w * h)
+        // Horizontal pass
+        for (y in 0 until h) {
+            var sum = 0f
+            for (dx in -radius..radius) sum += chVal(pixels[y * w + ((dx % w) + w) % w], ch)
+            hpass[y * w] = sum
+            for (x in 1 until w) {
+                sum += chVal(pixels[y * w + (x + radius) % w], ch) -
+                       chVal(pixels[y * w + ((x - radius - 1) % w + w) % w], ch)
+                hpass[y * w + x] = sum
+            }
+        }
+        // Vertical pass
+        val result = FloatArray(w * h)
+        for (x in 0 until w) {
+            var sum = 0f
+            for (dy in -radius..radius) sum += hpass[((dy % h) + h) % h * w + x]
+            result[x] = sum / total
+            for (y in 1 until h) {
+                sum += hpass[(y + radius) % h * w + x] -
+                       hpass[((y - radius - 1) % h + h) % h * w + x]
+                result[y * w + x] = sum / total
+            }
+        }
+        return result
+    }
+
+    // Collect all (img, radius) pairs from expression tree
+    private fun collectAvgParams(e: Expr, result: MutableSet<Pair<Int, Int>>) {
+        if (e is ExprAvg) result.add(Pair(e.img, e.radius))
+        if (e is ExprNeg) collectAvgParams(e.inner, result)
+        if (e is ExprBinOp) { collectAvgParams(e.left, result); collectAvgParams(e.right, result) }
+    }
+
+    // Precompute all avg lookups needed by the expression
+    private fun buildAvgCache(expr: Expr, px1: IntArray, px2: IntArray, w: Int, h: Int) {
+        val params = mutableSetOf<Pair<Int, Int>>()
+        collectAvgParams(expr, params)
+        avgCache.clear()
+        for ((img, rad) in params) {
+            val pxArr = if (img == 1) px1 else px2
+            for (ch in 0..2) {
+                avgCache[avgKey(ch, img, rad)] = precomputeBoxBlur(pxArr, w, h, ch, rad)
+            }
+        }
+    }
+
+    private fun buildAvgCacheForChannels(exprs: Array<Expr?>, px1: IntArray, px2: IntArray, w: Int, h: Int) {
+        val params = mutableSetOf<Pair<Int, Int>>()
+        for (e in exprs) if (e != null) collectAvgParams(e, params)
+        avgCache.clear()
+        for ((img, rad) in params) {
+            val pxArr = if (img == 1) px1 else px2
+            for (ch in 0..2) {
+                avgCache[avgKey(ch, img, rad)] = precomputeBoxBlur(pxArr, w, h, ch, rad)
+            }
+        }
+    }
     private abstract class Expr
     private class ExprNum(val value: Float) : Expr()
     private class ExprVar(val name: String, val neighbor: Int) : Expr()
@@ -689,18 +755,10 @@ class MainActivity : Activity() {
             return 0f
         }
         if (e is ExprAvg) {
-            val pxArr = if (e.img == 1) px1 else px2
             val ch = if (e.ch == -1) curCh else e.ch
-            var sum = 0f; var count = 0
-            for (dy in -e.radius..e.radius) {
-                for (dx in -e.radius..e.radius) {
-                    val nx = ((x + dx) % w + w) % w
-                    val ny = ((y + dy) % h + h) % h
-                    sum += chVal(pxArr[ny * w + nx], ch)
-                    count++
-                }
-            }
-            return sum / count
+            val cached = avgCache[avgKey(ch, e.img, e.radius)]
+            if (cached != null) return cached[y * w + x]
+            return 0f
         }
         if (e is ExprNeg) return -evalExpr(e.inner, px1, px2, x, y, w, h, curCh, divFlag)
         if (e is ExprBinOp) {
@@ -791,6 +849,7 @@ class MainActivity : Activity() {
             statusText.text = "Applying: $exprStr"
 
             Thread {
+                val t0 = System.currentTimeMillis()
                 val w: Int; val h: Int
                 if (bmp2 != null) { w = minOf(bmp1.width, bmp2.width); h = minOf(bmp1.height, bmp2.height) }
                 else { w = bmp1.width; h = bmp1.height }
@@ -800,9 +859,13 @@ class MainActivity : Activity() {
                 val px1 = IntArray(w * h); val px2 = IntArray(w * h)
                 s1.getPixels(px1, 0, w, 0, 0, w, h)
                 s2?.getPixels(px2, 0, w, 0, 0, w, h)
+
+                runOnUiThread { statusText.text = "Precomputing avg..." }
+                buildAvgCacheForChannels(chExprs, px1, px2, w, h)
+
                 val outPx = IntArray(w * h)
                 val divFlag = booleanArrayOf(false)
-                runOnUiThread { progressBar.max = h }
+                runOnUiThread { progressBar.max = h; statusText.text = "Processing pixels..." }
 
                 for (y in 0 until h) {
                     for (x in 0 until w) {
@@ -818,6 +881,7 @@ class MainActivity : Activity() {
 
                 if (s1 !== bmp1) s1.recycle()
                 if (s2 != null && s2 !== bmp2) s2.recycle()
+                avgCache.clear()
                 val result = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
                 result.setPixels(outPx, 0, w, 0, 0, w, h)
 
@@ -825,6 +889,7 @@ class MainActivity : Activity() {
                 val biased = if (bias != 1.0f) applyBias(result, bmp1, bias) else result
                 if (biased !== result) result.recycle()
                 val hadDivZero = divFlag[0]
+                val elapsed = (System.currentTimeMillis() - t0) / 1000f
 
                 runOnUiThread {
                     resultBitmap = biased
@@ -832,7 +897,7 @@ class MainActivity : Activity() {
                     progressBar.visibility = View.GONE
                     val biasStr = if (bias != 1.0f) " bias=$bias" else ""
                     val divStr = if (hadDivZero) " [div/0: used img1]" else ""
-                    statusText.text = "Expr done! ${w}x${h}$biasStr$divStr"
+                    statusText.text = "Done ${w}x${h} ${elapsed}s$biasStr$divStr"
                     isProcessing = false
                     updateButtons()
                 }
@@ -862,6 +927,7 @@ class MainActivity : Activity() {
             statusText.text = "Applying: $exprStr"
 
             Thread {
+                val t0 = System.currentTimeMillis()
                 val w: Int; val h: Int
                 if (bmp1 != null && bmp2 != null) { w = minOf(bmp1.width, bmp2.width); h = minOf(bmp1.height, bmp2.height) }
                 else if (bmp1 != null) { w = bmp1.width; h = bmp1.height }
@@ -872,9 +938,13 @@ class MainActivity : Activity() {
                 val px1 = IntArray(w * h); val px2 = IntArray(w * h)
                 s1?.getPixels(px1, 0, w, 0, 0, w, h)
                 s2?.getPixels(px2, 0, w, 0, 0, w, h)
+
+                runOnUiThread { statusText.text = "Precomputing avg..." }
+                buildAvgCache(parsed, px1, px2, w, h)
+
                 val outPx = IntArray(w * h)
                 val divFlag = booleanArrayOf(false)
-                runOnUiThread { progressBar.max = h }
+                runOnUiThread { progressBar.max = h; statusText.text = "Processing pixels..." }
 
                 for (y in 0 until h) {
                     for (x in 0 until w) {
@@ -889,6 +959,7 @@ class MainActivity : Activity() {
 
                 if (s1 != null && s1 !== bmp1) s1.recycle()
                 if (s2 != null && s2 !== bmp2) s2.recycle()
+                avgCache.clear()
                 val result = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
                 result.setPixels(outPx, 0, w, 0, 0, w, h)
 
@@ -896,6 +967,7 @@ class MainActivity : Activity() {
                 val biased = if (bias != 1.0f && bmp1 != null) applyBias(result, bmp1, bias) else result
                 if (biased !== result) result.recycle()
                 val hadDivZero = divFlag[0]
+                val elapsed = (System.currentTimeMillis() - t0) / 1000f
 
                 runOnUiThread {
                     resultBitmap = biased
@@ -903,7 +975,7 @@ class MainActivity : Activity() {
                     progressBar.visibility = View.GONE
                     val biasStr = if (bias != 1.0f && bmp1 != null) " bias=$bias" else ""
                     val divStr = if (hadDivZero) " [div/0: used img1]" else ""
-                    statusText.text = "Expr done! ${w}x${h}$biasStr$divStr"
+                    statusText.text = "Done ${w}x${h} ${elapsed}s$biasStr$divStr"
                     isProcessing = false
                     updateButtons()
                 }
