@@ -572,14 +572,15 @@ class MainActivity : Activity() {
 
     // Precomputed avg cache: key = ch*100000 + img*10000 + radius -> FloatArray
     private var avgCache = HashMap<Int, FloatArray>()
+    private var avgError: String? = null
 
     private fun avgKey(ch: Int, img: Int, radius: Int): Int = ch * 100000 + img * 10000 + radius
 
     // Separable box filter with toroidal wrapping - O(w*h) regardless of radius
-    private fun precomputeBoxBlur(pixels: IntArray, w: Int, h: Int, ch: Int, radius: Int): FloatArray {
+    // Reuses provided hpass buffer to reduce peak memory
+    private fun precomputeBoxBlur(pixels: IntArray, w: Int, h: Int, ch: Int, radius: Int, hpass: FloatArray): FloatArray {
         val size = 2 * radius + 1
-        val total = size.toLong() * size.toLong()
-        val hpass = FloatArray(w * h)
+        val total = size.toFloat() * size.toFloat()
         // Horizontal pass
         for (y in 0 until h) {
             var sum = 0f
@@ -618,11 +619,19 @@ class MainActivity : Activity() {
         val params = mutableSetOf<Pair<Int, Int>>()
         collectAvgParams(expr, params)
         avgCache.clear()
-        for ((img, rad) in params) {
-            val pxArr = if (img == 1) px1 else px2
-            for (ch in 0..2) {
-                avgCache[avgKey(ch, img, rad)] = precomputeBoxBlur(pxArr, w, h, ch, rad)
+        avgError = null
+        if (params.isEmpty()) return
+        try {
+            val hpass = FloatArray(w * h)
+            for ((img, rad) in params) {
+                val pxArr = if (img == 1) px1 else px2
+                for (ch in 0..2) {
+                    avgCache[avgKey(ch, img, rad)] = precomputeBoxBlur(pxArr, w, h, ch, rad, hpass)
+                }
             }
+        } catch (e: OutOfMemoryError) {
+            avgCache.clear()
+            avgError = "Out of memory computing avg - try smaller image or radius"
         }
     }
 
@@ -630,11 +639,19 @@ class MainActivity : Activity() {
         val params = mutableSetOf<Pair<Int, Int>>()
         for (e in exprs) if (e != null) collectAvgParams(e, params)
         avgCache.clear()
-        for ((img, rad) in params) {
-            val pxArr = if (img == 1) px1 else px2
-            for (ch in 0..2) {
-                avgCache[avgKey(ch, img, rad)] = precomputeBoxBlur(pxArr, w, h, ch, rad)
+        avgError = null
+        if (params.isEmpty()) return
+        try {
+            val hpass = FloatArray(w * h)
+            for ((img, rad) in params) {
+                val pxArr = if (img == 1) px1 else px2
+                for (ch in 0..2) {
+                    avgCache[avgKey(ch, img, rad)] = precomputeBoxBlur(pxArr, w, h, ch, rad, hpass)
+                }
             }
+        } catch (e: OutOfMemoryError) {
+            avgCache.clear()
+            avgError = "Out of memory computing avg - try smaller image or radius"
         }
     }
     private abstract class Expr
@@ -862,6 +879,11 @@ class MainActivity : Activity() {
 
                 runOnUiThread { statusText.text = "Precomputing avg..." }
                 buildAvgCacheForChannels(chExprs, px1, px2, w, h)
+                if (avgError != null) {
+                    val err = avgError!!
+                    runOnUiThread { statusText.text = err; progressBar.visibility = View.GONE; isProcessing = false; updateButtons() }
+                    return@Thread
+                }
 
                 val outPx = IntArray(w * h)
                 val divFlag = booleanArrayOf(false)
@@ -941,6 +963,11 @@ class MainActivity : Activity() {
 
                 runOnUiThread { statusText.text = "Precomputing avg..." }
                 buildAvgCache(parsed, px1, px2, w, h)
+                if (avgError != null) {
+                    val err = avgError!!
+                    runOnUiThread { statusText.text = err; progressBar.visibility = View.GONE; isProcessing = false; updateButtons() }
+                    return@Thread
+                }
 
                 val outPx = IntArray(w * h)
                 val divFlag = booleanArrayOf(false)
