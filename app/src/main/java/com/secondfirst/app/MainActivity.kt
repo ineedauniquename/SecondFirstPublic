@@ -656,7 +656,7 @@ class MainActivity : Activity() {
     }
     private abstract class Expr
     private class ExprNum(val value: Float) : Expr()
-    private class ExprVar(val name: String, val neighbor: Int) : Expr()
+    private class ExprVar(val name: String, val neighbor: Int, val offX: Int, val offY: Int) : Expr()
     private class ExprBinOp(val op: Char, val left: Expr, val right: Expr) : Expr()
     private class ExprNeg(val inner: Expr) : Expr()
     private class ExprAvg(val ch: Int, val img: Int, val radius: Int) : Expr()
@@ -670,6 +670,25 @@ class MainActivity : Activity() {
             return r
         }
         private fun skipWs() { while (pos < input.length && input[pos] == ' ') pos++ }
+        private fun parseSignedInt(): Int {
+            skipWs()
+            var neg = false
+            if (pos < input.length && input[pos] == '-') { neg = true; pos++ }
+            val start = pos
+            while (pos < input.length && input[pos].isDigit()) pos++
+            if (pos == start) throw RuntimeException("Expected integer at pos $pos")
+            val v = input.substring(start, pos).toInt()
+            return if (neg) -v else v
+        }
+        private fun parseOffset(): Pair<Int, Int> {
+            pos++ // skip first comma
+            val ox = parseSignedInt()
+            skipWs()
+            if (pos >= input.length || input[pos] != ',') throw RuntimeException("Expected ',' for Y offset at pos $pos")
+            pos++ // skip second comma
+            val oy = parseSignedInt()
+            return Pair(ox, oy)
+        }
         private fun parseExpr(): Expr {
             var left = parseTerm(); skipWs()
             while (pos < input.length && (input[pos] == '+' || input[pos] == '-')) {
@@ -721,7 +740,11 @@ class MainActivity : Activity() {
                     val name = "P${input[pos + 1]}"; pos += 2
                     var nb = 0
                     if (pos < input.length && input[pos] >= '1' && input[pos] <= '8') { nb = input[pos] - '0'; pos++ }
-                    return ExprVar(name, nb)
+                    if (pos < input.length && input[pos] == ',') {
+                        val (ox, oy) = parseOffset()
+                        return ExprVar(name, nb, ox, oy)
+                    }
+                    return ExprVar(name, nb, 0, 0)
                 }
                 throw RuntimeException("Unknown var at pos $pos")
             }
@@ -730,7 +753,11 @@ class MainActivity : Activity() {
                     val name = "${c.lowercaseChar()}${input[pos + 1]}"; pos += 2
                     var nb = 0
                     if (pos < input.length && input[pos] >= '1' && input[pos] <= '8') { nb = input[pos] - '0'; pos++ }
-                    return ExprVar(name, nb)
+                    if (pos < input.length && input[pos] == ',') {
+                        val (ox, oy) = parseOffset()
+                        return ExprVar(name, nb, ox, oy)
+                    }
+                    return ExprVar(name, nb, 0, 0)
                 }
                 throw RuntimeException("Expected r1/r2/g1/g2/b1/b2 at pos $pos")
             }
@@ -757,9 +784,16 @@ class MainActivity : Activity() {
     private fun evalExpr(e: Expr, px1: IntArray, px2: IntArray, x: Int, y: Int, w: Int, h: Int, curCh: Int, divFlag: BooleanArray): Float {
         if (e is ExprNum) return e.value
         if (e is ExprVar) {
-            val nb = e.neighbor
-            val nx = (x + NDX[nb] + w) % w
-            val ny = (y + NDY[nb] + h) % h
+            val nx: Int
+            val ny: Int
+            if (e.offX != 0 || e.offY != 0) {
+                nx = ((x + e.offX) % w + w) % w
+                ny = ((y - e.offY) % h + h) % h
+            } else {
+                val nb = e.neighbor
+                nx = (x + NDX[nb] + w) % w
+                ny = (y + NDY[nb] + h) % h
+            }
             val ni = ny * w + nx
             if (e.name == "P1") return chVal(px1[ni], curCh)
             if (e.name == "P2") return chVal(px2[ni], curCh)
@@ -837,6 +871,10 @@ class MainActivity : Activity() {
             Toast.makeText(this, "Enter an expression", Toast.LENGTH_SHORT).show()
             return
         }
+
+        // Copy formula to clipboard
+        val clipMgr = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        clipMgr.setPrimaryClip(android.content.ClipData.newPlainText("formula", exprStr))
 
         // Detect repeat(expr, N) wrapper
         var repeatCount = 1
