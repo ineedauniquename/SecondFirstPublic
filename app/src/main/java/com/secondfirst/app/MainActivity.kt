@@ -57,6 +57,15 @@ class MainActivity : Activity() {
     private var resultBitmap: Bitmap? = null
     private var isProcessing = false
 
+    // Colour index: per-channel sorted pixel rankings for Image 1
+    // colourIndex[ch][rank] = pixel index (flat), sorted ascending by channel value
+    // colourBuckets[ch][v] = start position in sorted array for pixels with value >= v
+    // colourBuckets[ch][v+1] - colourBuckets[ch][v] = count of pixels with exactly value v
+    private var colourIndex: Array<IntArray>? = null
+    private var colourBuckets: Array<IntArray>? = null
+    private var colourIndexW = 0
+    private var colourIndexH = 0
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -454,6 +463,7 @@ class MainActivity : Activity() {
                 preview1.setImageBitmap(null)
                 btnPick1.text = "Select Image 1"
                 btnClear1.isEnabled = false
+                clearColourIndex()
             }
             2 -> {
                 bitmap2 = null
@@ -496,6 +506,7 @@ class MainActivity : Activity() {
                 btnPick1.text = "Image 1 (${copy.width}x${copy.height})"
                 btnClear1.isEnabled = true
                 statusText.text = "Result copied to Image 1"
+                rebuildColourIndex()
             }
             2 -> {
                 bitmap2 = copy
@@ -560,6 +571,7 @@ class MainActivity : Activity() {
                 preview1.setImageBitmap(bitmap)
                 btnPick1.text = "Image 1 (${bitmap.width}x${bitmap.height})"
                 btnClear1.isEnabled = true
+                rebuildColourIndex()
             }
             PICK_IMAGE_2 -> {
                 bitmap2 = bitmap
@@ -810,6 +822,67 @@ class MainActivity : Activity() {
         if (ch == 0) return ((px shr 16) and 0xFF).toFloat()
         if (ch == 1) return ((px shr 8) and 0xFF).toFloat()
         return (px and 0xFF).toFloat()
+    }
+
+    private fun chValInt(px: Int, ch: Int): Int {
+        if (ch == 0) return (px shr 16) and 0xFF
+        if (ch == 1) return (px shr 8) and 0xFF
+        return px and 0xFF
+    }
+
+    // Build colour index for Image 1: counting sort per channel
+    private fun rebuildColourIndex() {
+        val bmp = bitmap1 ?: run {
+            clearColourIndex()
+            return
+        }
+        Thread {
+            val t0 = System.currentTimeMillis()
+            val w = bmp.width
+            val h = bmp.height
+            val n = w * h
+            val pixels = IntArray(n)
+            bmp.getPixels(pixels, 0, w, 0, 0, w, h)
+
+            try {
+                val idx = Array(3) { IntArray(n) }
+                val bkt = Array(3) { IntArray(257) }
+
+                for (ch in 0..2) {
+                    // Count occurrences of each value
+                    val count = IntArray(256)
+                    for (i in 0 until n) count[chValInt(pixels[i], ch)]++
+                    // Build cumulative offsets
+                    bkt[ch][0] = 0
+                    for (v in 0 until 256) bkt[ch][v + 1] = bkt[ch][v] + count[v]
+                    // Place indices into sorted positions
+                    val pos = IntArray(256)
+                    System.arraycopy(bkt[ch], 0, pos, 0, 256)
+                    for (i in 0 until n) {
+                        val v = chValInt(pixels[i], ch)
+                        idx[ch][pos[v]] = i
+                        pos[v]++
+                    }
+                }
+
+                colourIndex = idx
+                colourBuckets = bkt
+                colourIndexW = w
+                colourIndexH = h
+                val elapsed = System.currentTimeMillis() - t0
+                runOnUiThread { statusText.text = "Colour index: ${w}x${h} (${elapsed}ms)" }
+            } catch (e: OutOfMemoryError) {
+                clearColourIndex()
+                runOnUiThread { statusText.text = "Colour index: out of memory" }
+            }
+        }.start()
+    }
+
+    private fun clearColourIndex() {
+        colourIndex = null
+        colourBuckets = null
+        colourIndexW = 0
+        colourIndexH = 0
     }
 
     private fun evalExpr(e: Expr, px1: IntArray, px2: IntArray, x: Int, y: Int, w: Int, h: Int, curCh: Int, divFlag: BooleanArray): Float {
