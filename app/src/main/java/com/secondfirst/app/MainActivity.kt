@@ -259,7 +259,8 @@ class MainActivity : Activity() {
             arrayOf("9", "0", ".", "\u232B"),
             arrayOf("(", ")", "P1", "P2"),
             arrayOf("+", "-", "*", "/"),
-            arrayOf(" ", ",", "avg(", "repeat(")
+            arrayOf(" ", ",", "avg(", "rank("),
+            arrayOf("repeat(", "", "", "")
         )
         for (row in kbKeys) {
             val kbRow = LinearLayout(this).apply {
@@ -272,16 +273,17 @@ class MainActivity : Activity() {
             for (key in row) {
                 val btn = Button(this).apply {
                     text = if (key == " ") "SP" else if (key == "repeat(") "rpt(" else key
-                    setTextColor(Color.WHITE)
-                    setBackgroundColor(Color.parseColor("#3A3A3A"))
+                    setTextColor(if (key.isEmpty()) Color.TRANSPARENT else Color.WHITE)
+                    setBackgroundColor(if (key.isEmpty()) Color.parseColor("#1C1B1F") else Color.parseColor("#3A3A3A"))
                     textSize = 14f
                     setPadding(0, 5, 0, 5)
                     minimumWidth = 0
                     minWidth = 0
                     minimumHeight = 0
                     minHeight = 0
+                    isEnabled = key.isNotEmpty()
                 }
-                btn.setOnClickListener { onKbKey(key) }
+                if (key.isNotEmpty()) btn.setOnClickListener { onKbKey(key) }
                 val w = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
                 w.setMargins(2, 2, 2, 2)
                 kbRow.addView(btn, w)
@@ -676,6 +678,7 @@ class MainActivity : Activity() {
         if (e is ExprAvg) result.add(Pair(e.img, e.radius))
         if (e is ExprNeg) collectAvgParams(e.inner, result)
         if (e is ExprBinOp) { collectAvgParams(e.left, result); collectAvgParams(e.right, result) }
+        if (e is ExprRank) collectAvgParams(e.inner, result)
     }
 
     private fun buildAvgCacheForChannels(exprs: Array<Expr?>, px1: IntArray, px2: IntArray, w: Int, h: Int) {
@@ -704,6 +707,8 @@ class MainActivity : Activity() {
     private class ExprNeg(val inner: Expr) : Expr()
     private class ExprAvg(val ch: Int, val img: Int, val radius: Int) : Expr()
     // ch: -1=current(P), 0=R, 1=G, 2=B; img: 1 or 2; radius: 1+ (grid = 2r+1 squared)
+    private class ExprRank(val inner: Expr, val ch: Int) : Expr()
+    // ch: 0=R, 1=G, 2=B; looks up pixel at rank position in colour index
 
     private class ExprParser(private val input: String) {
         private var pos = 0
@@ -790,6 +795,26 @@ class MainActivity : Activity() {
                     return ExprVar(name, nb, 0, 0)
                 }
                 throw RuntimeException("Unknown var at pos $pos")
+            }
+            if ((c == 'r' || c == 'R') && pos + 4 < input.length &&
+                (input[pos+1] == 'a' || input[pos+1] == 'A') &&
+                (input[pos+2] == 'n' || input[pos+2] == 'N') &&
+                (input[pos+3] == 'k' || input[pos+3] == 'K') && input[pos+4] == '(') {
+                pos += 5; skipWs()
+                val inner = parseExpr()
+                skipWs()
+                if (pos >= input.length || input[pos] != ',') throw RuntimeException("Expected ',' in rank()")
+                pos++; skipWs()
+                val cc2 = input[pos].lowercaseChar()
+                val rch: Int
+                if (cc2 == 'r') rch = 0
+                else if (cc2 == 'g') rch = 1
+                else if (cc2 == 'b') rch = 2
+                else throw RuntimeException("Expected R/G/B in rank()")
+                pos++; skipWs()
+                if (pos >= input.length || input[pos] != ')') throw RuntimeException("Expected ')' in rank()")
+                pos++
+                return ExprRank(inner, rch)
             }
             if (c == 'r' || c == 'g' || c == 'b' || c == 'R' || c == 'G' || c == 'B') {
                 if (pos + 1 < input.length && (input[pos + 1] == '1' || input[pos + 1] == '2')) {
@@ -915,6 +940,23 @@ class MainActivity : Activity() {
             if (cached != null) return cached[y * w + x]
             return 0f
         }
+        if (e is ExprRank) {
+            val idx = colourIndex ?: return 0f
+            val n = colourIndexW * colourIndexH
+            if (n == 0) return 0f
+            val v = evalExpr(e.inner, px1, px2, x, y, w, h, curCh, divFlag)
+            val pos = (v / 255f * (n - 1).toFloat()).toInt().coerceIn(0, n - 1)
+            val pi = idx[e.ch][pos]
+            if (colourIndexW == w && colourIndexH == h) {
+                return chVal(px1[pi], curCh)
+            }
+            // Map from colour index coordinates to processing coordinates
+            val ox = pi % colourIndexW
+            val oy = pi / colourIndexW
+            val sx = ox * w / colourIndexW
+            val sy = oy * h / colourIndexH
+            return chVal(px1[sy * w + sx], curCh)
+        }
         if (e is ExprNeg) return -evalExpr(e.inner, px1, px2, x, y, w, h, curCh, divFlag)
         if (e is ExprBinOp) {
             val l = evalExpr(e.left, px1, px2, x, y, w, h, curCh, divFlag)
@@ -936,6 +978,7 @@ class MainActivity : Activity() {
         if (e is ExprNum) return false
         if (e is ExprNeg) return exprUsesImg2(e.inner)
         if (e is ExprBinOp) return exprUsesImg2(e.left) || exprUsesImg2(e.right)
+        if (e is ExprRank) return exprUsesImg2(e.inner)
         return false
     }
 
