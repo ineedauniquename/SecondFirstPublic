@@ -257,10 +257,9 @@ class MainActivity : Activity() {
             arrayOf("1", "2", "3", "4"),
             arrayOf("5", "6", "7", "8"),
             arrayOf("9", "0", ".", "\u232B"),
-            arrayOf("(", ")", "P1", "P2"),
-            arrayOf("+", "-", "*", "/"),
-            arrayOf(" ", ",", "avg(", "rank("),
-            arrayOf("repeat(", "", "", "")
+            arrayOf("(", ")", "+", "-"),
+            arrayOf("*", "/", "avg(", "rank("),
+            arrayOf(" ", ",", "repeat(", "")
         )
         for (row in kbKeys) {
             val kbRow = LinearLayout(this).apply {
