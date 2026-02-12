@@ -1,0 +1,53 @@
+name: Build APKs
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build debug APKs
+        run: ./gradlew assembleDebug
+
+      - name: Collect APKs
+        id: apks
+        run: |
+          mkdir -p release-apks
+          cp app/build/outputs/apk/debug/app-debug.apk release-apks/ 2>/dev/null || true
+          cp paintapp/build/outputs/apk/debug/paintapp-debug.apk release-apks/ 2>/dev/null || true
+          echo "files=$(ls release-apks/*.apk | tr '\n' ',')" >> "$GITHUB_OUTPUT"
+
+      - name: Get short SHA
+        id: sha
+        run: echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest Build (${{ steps.sha.outputs.short }})
+          body: |
+            Automated debug build from commit ${{ github.sha }}.
+
+            Download the APKs below to install on your Android device.
+          make_latest: true
+          files: release-apks/*.apk
