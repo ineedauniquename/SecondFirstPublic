@@ -61,6 +61,14 @@ class MainActivity : Activity() {
     // colourIndex[ch][rank] = pixel index (flat), sorted ascending by channel value
     // colourBuckets[ch][v] = start position in sorted array for pixels with value >= v
     // colourBuckets[ch][v+1] - colourBuckets[ch][v] = count of pixels with exactly value v
+    // Debug rank tracking
+    private var dbgRankV = -1f
+    private var dbgRankPos = -1
+    private var dbgRankPi = -1
+    private var dbgRankResult = -1f
+    private var dbgRankN = -1
+    private var dbgRankCh = -1
+
     @Volatile private var colourIndex: Array<IntArray>? = null
     @Volatile private var colourBuckets: Array<IntArray>? = null
     @Volatile private var colourIndexW = 0
@@ -82,7 +90,7 @@ class MainActivity : Activity() {
         }
 
         val title = TextView(this).apply {
-            text = "Image Multiplier v11"
+            text = "Image Multiplier v12"
             textSize = 26f
             setTextColor(Color.WHITE)
             setGravity(Gravity.CENTER)
@@ -940,8 +948,27 @@ class MainActivity : Activity() {
             return 0f
         }
         if (e is ExprRank) {
-            // DEBUG: return 128 to test if this code path is reached
-            return 128f
+            val idx = colourIndex ?: return 0f
+            val n = colourIndexW * colourIndexH
+            if (n == 0) return 0f
+            val v = evalExpr(e.inner, px1, px2, x, y, w, h, curCh, divFlag)
+            val pos = (v / 255f * (n - 1).toFloat()).toInt().coerceIn(0, n - 1)
+            val pi = idx[e.ch][pos]
+            val result = if (colourIndexW == w && colourIndexH == h) {
+                chVal(px1[pi], curCh)
+            } else {
+                val ox = pi % colourIndexW
+                val oy = pi / colourIndexW
+                val sx = ox * w / colourIndexW
+                val sy = oy * h / colourIndexH
+                chVal(px1[sy * w + sx], curCh)
+            }
+            // Debug: capture first call where v > 0
+            if (dbgRankV < 0f && v > 0f) {
+                dbgRankV = v; dbgRankPos = pos; dbgRankPi = pi
+                dbgRankResult = result; dbgRankN = n; dbgRankCh = curCh
+            }
+            return result
         }
         if (e is ExprNeg) return -evalExpr(e.inner, px1, px2, x, y, w, h, curCh, divFlag)
         if (e is ExprBinOp) {
@@ -1110,6 +1137,10 @@ class MainActivity : Activity() {
                 }
             }
 
+            // Reset debug rank tracking
+            dbgRankV = -1f; dbgRankPos = -1; dbgRankPi = -1
+            dbgRankResult = -1f; dbgRankN = -1; dbgRankCh = -1
+
             val outPx = IntArray(w * h)
             val divFlag = booleanArrayOf(false)
             val chExprs = arrayOf<Expr?>(effR, effG, effB)
@@ -1150,6 +1181,11 @@ class MainActivity : Activity() {
                 if (r > 0 || g > 0 || b > 0) nonBlackOut++
             }
             dbg += " out:R=$maxOutR,G=$maxOutG,B=$maxOutB,nb=$nonBlackOut"
+            if (dbgRankV >= 0f) {
+                dbg += " RNK:v=${dbgRankV.toInt()},pos=$dbgRankPos,pi=$dbgRankPi,res=${dbgRankResult.toInt()},n=$dbgRankN,ch=$dbgRankCh"
+            } else if (needsRank) {
+                dbg += " RNK:never_v>0"
+            }
 
             if (s1 != null && s1 !== bmp1) s1.recycle()
             if (s2 != null && s2 !== bmp2) s2.recycle()
