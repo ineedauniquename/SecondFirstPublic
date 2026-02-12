@@ -61,10 +61,10 @@ class MainActivity : Activity() {
     // colourIndex[ch][rank] = pixel index (flat), sorted ascending by channel value
     // colourBuckets[ch][v] = start position in sorted array for pixels with value >= v
     // colourBuckets[ch][v+1] - colourBuckets[ch][v] = count of pixels with exactly value v
-    private var colourIndex: Array<IntArray>? = null
-    private var colourBuckets: Array<IntArray>? = null
-    private var colourIndexW = 0
-    private var colourIndexH = 0
+    @Volatile private var colourIndex: Array<IntArray>? = null
+    @Volatile private var colourBuckets: Array<IntArray>? = null
+    @Volatile private var colourIndexW = 0
+    @Volatile private var colourIndexH = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -981,6 +981,13 @@ class MainActivity : Activity() {
         return false
     }
 
+    private fun exprUsesRank(e: Expr): Boolean {
+        if (e is ExprRank) return true
+        if (e is ExprNeg) return exprUsesRank(e.inner)
+        if (e is ExprBinOp) return exprUsesRank(e.left) || exprUsesRank(e.right)
+        return false
+    }
+
     private fun applyExpression() {
         if (isProcessing) return
         val bmp1 = bitmap1
@@ -1044,6 +1051,11 @@ class MainActivity : Activity() {
         }
         if (needsImg2 && bmp2 == null) {
             Toast.makeText(this, "Expression uses Image 2 but it's not loaded", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val needsRank = exprUsesRank(effR) || exprUsesRank(effG) || exprUsesRank(effB)
+        if (needsRank && colourIndex == null) {
+            Toast.makeText(this, "Colour index not ready - wait for it to build or load Image 1", Toast.LENGTH_LONG).show()
             return
         }
 
