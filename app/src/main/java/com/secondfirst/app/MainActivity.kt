@@ -82,7 +82,7 @@ class MainActivity : Activity() {
         }
 
         val title = TextView(this).apply {
-            text = "Image Multiplier v10"
+            text = "Image Multiplier v11"
             textSize = 26f
             setTextColor(Color.WHITE)
             setGravity(Gravity.CENTER)
@@ -940,21 +940,8 @@ class MainActivity : Activity() {
             return 0f
         }
         if (e is ExprRank) {
-            val idx = colourIndex ?: return 0f
-            val n = colourIndexW * colourIndexH
-            if (n == 0) return 0f
-            val v = evalExpr(e.inner, px1, px2, x, y, w, h, curCh, divFlag)
-            val pos = (v / 255f * (n - 1).toFloat()).toInt().coerceIn(0, n - 1)
-            val pi = idx[e.ch][pos]
-            if (colourIndexW == w && colourIndexH == h) {
-                return chVal(px1[pi], curCh)
-            }
-            // Map from colour index coordinates to processing coordinates
-            val ox = pi % colourIndexW
-            val oy = pi / colourIndexW
-            val sx = ox * w / colourIndexW
-            val sy = oy * h / colourIndexH
-            return chVal(px1[sy * w + sx], curCh)
+            // DEBUG: return 128 to test if this code path is reached
+            return 128f
         }
         if (e is ExprNeg) return -evalExpr(e.inner, px1, px2, x, y, w, h, curCh, divFlag)
         if (e is ExprBinOp) {
