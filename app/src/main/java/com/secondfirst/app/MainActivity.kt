@@ -82,7 +82,7 @@ class MainActivity : Activity() {
         }
 
         val title = TextView(this).apply {
-            text = "Image Multiplier v7"
+            text = "Image Multiplier v8"
             textSize = 26f
             setTextColor(Color.WHITE)
             setGravity(Gravity.CENTER)
@@ -1054,8 +1054,8 @@ class MainActivity : Activity() {
             return
         }
         val needsRank = exprUsesRank(effR) || exprUsesRank(effG) || exprUsesRank(effB)
-        if (needsRank && colourIndex == null) {
-            Toast.makeText(this, "Colour index not ready - wait for it to build or load Image 1", Toast.LENGTH_LONG).show()
+        if (needsRank && bmp1 == null) {
+            Toast.makeText(this, "rank() requires Image 1", Toast.LENGTH_LONG).show()
             return
         }
 
@@ -1077,6 +1077,37 @@ class MainActivity : Activity() {
             val px1 = IntArray(w * h); val px2 = IntArray(w * h)
             s1?.getPixels(px1, 0, w, 0, 0, w, h)
             s2?.getPixels(px2, 0, w, 0, 0, w, h)
+
+            // Build colour index from px1 inline if rank() is used
+            if (needsRank) {
+                runOnUiThread { statusText.text = "Building colour index..." }
+                val n = w * h
+                try {
+                    val idx = Array(3) { IntArray(n) }
+                    val bkt = Array(3) { IntArray(257) }
+                    for (ch in 0..2) {
+                        val count = IntArray(256)
+                        for (i in 0 until n) count[chValInt(px1[i], ch)]++
+                        bkt[ch][0] = 0
+                        for (v in 0 until 256) bkt[ch][v + 1] = bkt[ch][v] + count[v]
+                        val pos = IntArray(256)
+                        System.arraycopy(bkt[ch], 0, pos, 0, 256)
+                        for (i in 0 until n) {
+                            val v2 = chValInt(px1[i], ch)
+                            idx[ch][pos[v2]] = i
+                            pos[v2]++
+                        }
+                    }
+                    colourIndex = idx
+                    colourBuckets = bkt
+                    colourIndexW = w
+                    colourIndexH = h
+                } catch (e: OutOfMemoryError) {
+                    colourIndex = null
+                    runOnUiThread { statusText.text = "Colour index: out of memory"; progressBar.visibility = View.GONE; isProcessing = false; updateButtons() }
+                    return@Thread
+                }
+            }
 
             val outPx = IntArray(w * h)
             val divFlag = booleanArrayOf(false)
