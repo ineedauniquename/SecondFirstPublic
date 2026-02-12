@@ -90,7 +90,7 @@ class MainActivity : Activity() {
         }
 
         val title = TextView(this).apply {
-            text = "Image Multiplier v13"
+            text = "Image Multiplier v14"
             textSize = 26f
             setTextColor(Color.WHITE)
             setGravity(Gravity.CENTER)
@@ -1180,12 +1180,10 @@ class MainActivity : Activity() {
                 if (r > maxOutR) maxOutR = r; if (g > maxOutG) maxOutG = g; if (b > maxOutB) maxOutB = b
                 if (r > 0 || g > 0 || b > 0) nonBlackOut++
             }
-            dbg += " out:R=$maxOutR,G=$maxOutG,B=$maxOutB,nb=$nonBlackOut"
-            if (dbgRankV >= 0f) {
-                dbg += " RNK:v=${dbgRankV.toInt()},pos=$dbgRankPos,pi=$dbgRankPi,res=${dbgRankResult.toInt()},n=$dbgRankN,ch=$dbgRankCh"
-            } else if (needsRank) {
-                dbg += " RNK:never_v>0"
-            }
+            val dbg2 = if (dbgRankV >= 0f) {
+                "RNK v=${dbgRankV.toInt()} pos=$dbgRankPos pi=$dbgRankPi res=${dbgRankResult.toInt()} n=$dbgRankN ch=$dbgRankCh"
+            } else if (needsRank) { "RNK never_v>0" } else { "" }
+            val dbg3 = "out R=$maxOutR G=$maxOutG B=$maxOutB nb=$nonBlackOut"
 
             if (s1 != null && s1 !== bmp1) s1.recycle()
             if (s2 != null && s2 !== bmp2) s2.recycle()
@@ -1203,7 +1201,8 @@ class MainActivity : Activity() {
                 resultBitmap = biased
                 previewResult.setImageBitmap(biased)
                 progressBar.visibility = View.GONE
-                Toast.makeText(this@MainActivity, dbg, Toast.LENGTH_LONG).show()
+                Toast.makeText(this@MainActivity, dbg2, Toast.LENGTH_LONG).show()
+                Toast.makeText(this@MainActivity, dbg3, Toast.LENGTH_LONG).show()
                 isProcessing = false
                 updateButtons()
             }
