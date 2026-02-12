@@ -62,7 +62,7 @@ class MainActivity : Activity() {
         val btnGreen = makeColorButton("G", Color.parseColor("#44CC44"))
         val btnBlue = makeColorButton("B", Color.parseColor("#4488FF"))
         val btnClear = Button(this).apply {
-            text = "CLR"
+            text = "CLEAR"
             setTextColor(Color.WHITE)
             setBackgroundColor(Color.parseColor("#555555"))
             setPadding(dp(12), dp(4), dp(12), dp(4))
@@ -101,14 +101,27 @@ class MainActivity : Activity() {
             updatePreview()
         }
 
-        val spacer = View(this)
         colorRow.addView(btnRed, makeRowLP(0, dp(8)))
         colorRow.addView(btnGreen, makeRowLP(0, dp(8)))
         colorRow.addView(btnBlue, makeRowLP(0, dp(8)))
-        colorRow.addView(spacer, LinearLayout.LayoutParams(0, 1, 1f))
-        colorRow.addView(btnFullScreen, makeRowLP(0, dp(8)))
+        val colorSpacer = View(this)
+        colorRow.addView(colorSpacer, LinearLayout.LayoutParams(0, 1, 1f))
         colorRow.addView(btnClear, makeRowLP(0, 0))
         controls.addView(colorRow, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ))
+
+        // --- Row: VIEW button (full width) ---
+        val viewRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, dp(8), 0, 0)
+        }
+        viewRow.addView(btnFullScreen, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ))
+        controls.addView(viewRow, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
         ))
