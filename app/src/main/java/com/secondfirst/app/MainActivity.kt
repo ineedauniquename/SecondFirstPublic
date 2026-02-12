@@ -82,7 +82,7 @@ class MainActivity : Activity() {
         }
 
         val title = TextView(this).apply {
-            text = "Image Multiplier v9"
+            text = "Image Multiplier v10"
             textSize = 26f
             setTextColor(Color.WHITE)
             setGravity(Gravity.CENTER)
@@ -1054,6 +1054,8 @@ class MainActivity : Activity() {
             return
         }
         val needsRank = exprUsesRank(effR) || exprUsesRank(effG) || exprUsesRank(effB)
+        // Debug: show what was parsed
+        Toast.makeText(this, "rgb='$rgbStr' type=${effR.javaClass.simpleName} rank=$needsRank", Toast.LENGTH_LONG).show()
         if (needsRank && bmp1 == null) {
             Toast.makeText(this, "rank() requires Image 1", Toast.LENGTH_LONG).show()
             return
@@ -1079,7 +1081,7 @@ class MainActivity : Activity() {
             s2?.getPixels(px2, 0, w, 0, 0, w, h)
 
             // Build colour index from px1 inline if rank() is used
-            var dbg = ""
+            var dbg = "rank=$needsRank"
             if (needsRank) {
                 runOnUiThread { statusText.text = "Building colour index..." }
                 val n = w * h
