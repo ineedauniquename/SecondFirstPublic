@@ -28,6 +28,14 @@ jobs:
       - name: Build debug APKs
         run: ./gradlew assembleDebug
 
+      - name: Collect APKs
+        id: apks
+        run: |
+          mkdir -p release-apks
+          cp app/build/outputs/apk/debug/app-debug.apk release-apks/ 2>/dev/null || true
+          cp paintapp/build/outputs/apk/debug/paintapp-debug.apk release-apks/ 2>/dev/null || true
+          echo "files=$(ls release-apks/*.apk | tr '\n' ',')" >> "$GITHUB_OUTPUT"
+
       - name: Get short SHA
         id: sha
         run: echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
@@ -42,6 +50,4 @@ jobs:
 
             Download the APKs below to install on your Android device.
           make_latest: true
-          files: |
-            app/build/outputs/apk/debug/app-debug.apk
-            paintapp/build/outputs/apk/debug/paintapp-debug.apk
+          files: release-apks/*.apk
