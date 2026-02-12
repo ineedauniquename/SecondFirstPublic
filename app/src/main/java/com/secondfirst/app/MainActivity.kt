@@ -90,7 +90,7 @@ class MainActivity : Activity() {
         }
 
         val title = TextView(this).apply {
-            text = "Image Multiplier v15"
+            text = "Image Multiplier v16"
             textSize = 26f
             setTextColor(Color.WHITE)
             setGravity(Gravity.CENTER)
@@ -949,11 +949,29 @@ class MainActivity : Activity() {
         }
         if (e is ExprRank) {
             val idx = colourIndex ?: return 0f
+            val bkt = colourBuckets ?: return 0f
             val n = colourIndexW * colourIndexH
             if (n == 0) return 0f
             val v = evalExpr(e.inner, px1, px2, x, y, w, h, curCh, divFlag)
-            val pos = (v / 255f * (n - 1).toFloat()).toInt().coerceIn(0, n - 1)
-            val pi = idx[e.ch][pos]
+            val vInt = v.toInt().coerceIn(0, 255)
+            // Find pixels in image 1 with closest channel value to vInt
+            var lo = vInt; var hi = vInt
+            var pi = 0
+            var found = false
+            while (lo >= 0 || hi <= 255) {
+                if (lo >= 0 && bkt[e.ch][lo + 1] > bkt[e.ch][lo]) {
+                    val s = bkt[e.ch][lo]; val sz = bkt[e.ch][lo + 1] - s
+                    pi = idx[e.ch][s + (y * w + x) % sz]
+                    found = true; break
+                }
+                if (hi <= 255 && hi != lo && bkt[e.ch][hi + 1] > bkt[e.ch][hi]) {
+                    val s = bkt[e.ch][hi]; val sz = bkt[e.ch][hi + 1] - s
+                    pi = idx[e.ch][s + (y * w + x) % sz]
+                    found = true; break
+                }
+                lo--; hi++
+            }
+            if (!found) return 0f
             val result = if (colourIndexW == w && colourIndexH == h) {
                 chVal(px1[pi], curCh)
             } else {
@@ -965,7 +983,7 @@ class MainActivity : Activity() {
             }
             // Debug: capture first call where v > 0
             if (dbgRankV < 0f && v > 0f) {
-                dbgRankV = v; dbgRankPos = pos; dbgRankPi = pi
+                dbgRankV = v; dbgRankPos = lo.coerceAtLeast(hi); dbgRankPi = pi
                 dbgRankResult = result; dbgRankN = n; dbgRankCh = curCh
             }
             return result
