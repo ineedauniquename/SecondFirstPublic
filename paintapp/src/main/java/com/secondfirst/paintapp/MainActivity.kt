@@ -21,6 +21,8 @@ import android.widget.TextView
 class MainActivity : Activity() {
 
     private lateinit var paintView: PaintView
+    private lateinit var controlsPanel: LinearLayout
+    private var isFullScreen = false
 
     // Current brush settings
     private var selectedChannel = Channel.RED
@@ -66,6 +68,13 @@ class MainActivity : Activity() {
             setPadding(dp(16), dp(4), dp(16), dp(4))
             setOnClickListener { paintView.clear() }
         }
+        val btnFullScreen = Button(this).apply {
+            text = "FULL"
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.parseColor("#446688"))
+            setPadding(dp(16), dp(4), dp(16), dp(4))
+            setOnClickListener { enterFullScreen() }
+        }
 
         // Highlight default selection
         btnRed.alpha = 1.0f
@@ -93,6 +102,7 @@ class MainActivity : Activity() {
         colorRow.addView(btnGreen, makeRowLP(0, dp(8)))
         colorRow.addView(btnBlue, makeRowLP(0, dp(8)))
         colorRow.addView(spacer, LinearLayout.LayoutParams(0, 1, 1f))
+        colorRow.addView(btnFullScreen, makeRowLP(0, dp(8)))
         colorRow.addView(btnClear, makeRowLP(0, 0))
         controls.addView(colorRow, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
@@ -150,12 +160,23 @@ class MainActivity : Activity() {
         previewRow.addView(previewSwatch, LinearLayout.LayoutParams(dp(48), dp(32)))
         controls.addView(previewRow)
 
+        controlsPanel = controls
         root.addView(controls, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
         ))
 
         setContentView(root)
+    }
+
+    private fun enterFullScreen() {
+        isFullScreen = true
+        controlsPanel.visibility = View.GONE
+    }
+
+    fun exitFullScreen() {
+        isFullScreen = false
+        controlsPanel.visibility = View.VISIBLE
     }
 
     private lateinit var previewSwatch: View
@@ -272,6 +293,13 @@ class MainActivity : Activity() {
         }
 
         override fun onTouchEvent(event: MotionEvent): Boolean {
+            if (isFullScreen) {
+                if (event.action == MotionEvent.ACTION_UP) {
+                    exitFullScreen()
+                }
+                return true
+            }
+
             val x = event.x
             val y = event.y
 
