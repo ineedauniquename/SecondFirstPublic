@@ -273,10 +273,15 @@ class MainActivity : Activity() {
 
         override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
             super.onSizeChanged(w, h, oldw, oldh)
-            if (canvasBitmap == null || canvasBitmap!!.width != w || canvasBitmap!!.height != h) {
+            val oldBitmap = canvasBitmap
+            if (oldBitmap == null || oldBitmap.width != w || oldBitmap.height != h) {
                 canvasBitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).also {
                     drawCanvas = Canvas(it)
                     drawCanvas!!.drawColor(Color.BLACK)
+                    if (oldBitmap != null) {
+                        drawCanvas!!.drawBitmap(oldBitmap, 0f, 0f, null)
+                        oldBitmap.recycle()
+                    }
                 }
             }
             strokeBitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).also {
