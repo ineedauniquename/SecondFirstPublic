@@ -90,7 +90,7 @@ class MainActivity : Activity() {
         }
 
         val title = TextView(this).apply {
-            text = "Image Multiplier v14"
+            text = "Image Multiplier v15"
             textSize = 26f
             setTextColor(Color.WHITE)
             setGravity(Gravity.CENTER)
@@ -1068,8 +1068,6 @@ class MainActivity : Activity() {
             return
         }
         val needsRank = exprUsesRank(effR) || exprUsesRank(effG) || exprUsesRank(effB)
-        // Debug: show what was parsed
-        Toast.makeText(this, "rgb='$rgbStr' type=${effR.javaClass.simpleName} rank=$needsRank", Toast.LENGTH_LONG).show()
         if (needsRank && bmp1 == null) {
             Toast.makeText(this, "rank() requires Image 1", Toast.LENGTH_LONG).show()
             return
@@ -1181,9 +1179,9 @@ class MainActivity : Activity() {
                 if (r > 0 || g > 0 || b > 0) nonBlackOut++
             }
             val dbg2 = if (dbgRankV >= 0f) {
-                "RNK v=${dbgRankV.toInt()} pos=$dbgRankPos pi=$dbgRankPi res=${dbgRankResult.toInt()} n=$dbgRankN ch=$dbgRankCh"
-            } else if (needsRank) { "RNK never_v>0" } else { "" }
-            val dbg3 = "out R=$maxOutR G=$maxOutG B=$maxOutB nb=$nonBlackOut"
+                "v=${dbgRankV.toInt()} p=$dbgRankPos r=${dbgRankResult.toInt()} ch=$dbgRankCh"
+            } else if (needsRank) { "never_v>0" } else { "" }
+            val dbgAll = "O:$maxOutR,$maxOutG,$maxOutB nb=$nonBlackOut $dbg2"
 
             if (s1 != null && s1 !== bmp1) s1.recycle()
             if (s2 != null && s2 !== bmp2) s2.recycle()
@@ -1201,8 +1199,7 @@ class MainActivity : Activity() {
                 resultBitmap = biased
                 previewResult.setImageBitmap(biased)
                 progressBar.visibility = View.GONE
-                Toast.makeText(this@MainActivity, dbg2, Toast.LENGTH_LONG).show()
-                Toast.makeText(this@MainActivity, dbg3, Toast.LENGTH_LONG).show()
+                Toast.makeText(this@MainActivity, dbgAll, Toast.LENGTH_LONG).show()
                 isProcessing = false
                 updateButtons()
             }
