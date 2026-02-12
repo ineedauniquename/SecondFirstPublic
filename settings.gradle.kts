@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "SecondFirstApp"
 include(":app")
+include(":paintapp")

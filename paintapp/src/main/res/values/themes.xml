@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.RGBPainter" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#FF333333</item>
+        <item name="colorPrimaryVariant">#FF222222</item>
+        <item name="colorOnPrimary">#FFFFFFFF</item>
+        <item name="colorSecondary">#FF666666</item>
+        <item name="android:statusBarColor">#FF111111</item>
+    </style>
+</resources>
