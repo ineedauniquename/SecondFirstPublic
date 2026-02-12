@@ -82,7 +82,7 @@ class MainActivity : Activity() {
         }
 
         val title = TextView(this).apply {
-            text = "Image Multiplier v8"
+            text = "Image Multiplier v9"
             textSize = 26f
             setTextColor(Color.WHITE)
             setGravity(Gravity.CENTER)
@@ -1079,9 +1079,17 @@ class MainActivity : Activity() {
             s2?.getPixels(px2, 0, w, 0, 0, w, h)
 
             // Build colour index from px1 inline if rank() is used
+            var dbg = ""
             if (needsRank) {
                 runOnUiThread { statusText.text = "Building colour index..." }
                 val n = w * h
+                // Debug: check px1 and px2 content
+                var maxR1 = 0; var maxR2 = 0; var nonBlack1 = 0; var nonBlack2 = 0
+                for (i in 0 until n) {
+                    val r1 = chValInt(px1[i], 0); if (r1 > maxR1) maxR1 = r1; if (px1[i] and 0x00FFFFFF != 0) nonBlack1++
+                    val r2 = chValInt(px2[i], 0); if (r2 > maxR2) maxR2 = r2; if (px2[i] and 0x00FFFFFF != 0) nonBlack2++
+                }
+                dbg = "p1:maxR=$maxR1,nb=$nonBlack1 p2:maxR=$maxR2,nb=$nonBlack2"
                 try {
                     val idx = Array(3) { IntArray(n) }
                     val bkt = Array(3) { IntArray(257) }
@@ -1102,6 +1110,10 @@ class MainActivity : Activity() {
                     colourBuckets = bkt
                     colourIndexW = w
                     colourIndexH = h
+                    // Debug: verify index
+                    val lastPi = idx[0][n - 1]
+                    val lastR = chValInt(px1[lastPi], 0)
+                    dbg += " idx:lastR=$lastR"
                 } catch (e: OutOfMemoryError) {
                     colourIndex = null
                     runOnUiThread { statusText.text = "Colour index: out of memory"; progressBar.visibility = View.GONE; isProcessing = false; updateButtons() }
@@ -1141,6 +1153,15 @@ class MainActivity : Activity() {
                 }
             }
 
+            // Debug: check output
+            var maxOutR = 0; var maxOutG = 0; var maxOutB = 0; var nonBlackOut = 0
+            for (i in 0 until w * h) {
+                val r = (outPx[i] shr 16) and 0xFF; val g = (outPx[i] shr 8) and 0xFF; val b = outPx[i] and 0xFF
+                if (r > maxOutR) maxOutR = r; if (g > maxOutG) maxOutG = g; if (b > maxOutB) maxOutB = b
+                if (r > 0 || g > 0 || b > 0) nonBlackOut++
+            }
+            dbg += " out:R=$maxOutR,G=$maxOutG,B=$maxOutB,nb=$nonBlackOut"
+
             if (s1 != null && s1 !== bmp1) s1.recycle()
             if (s2 != null && s2 !== bmp2) s2.recycle()
             avgCache.clear()
@@ -1159,7 +1180,7 @@ class MainActivity : Activity() {
                 progressBar.visibility = View.GONE
                 val biasStr = if (bias != 1.0f && bmp1 != null) " bias=$bias" else ""
                 val divStr = if (hadDivZero) " [div/0: used img1]" else ""
-                statusText.text = "Done ${w}x${h} ${elapsed}s$biasStr$divStr"
+                statusText.text = "Done ${w}x${h} ${elapsed}s$biasStr$divStr $dbg"
                 isProcessing = false
                 updateButtons()
             }
