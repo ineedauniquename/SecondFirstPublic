@@ -90,7 +90,7 @@ class MainActivity : Activity() {
         }
 
         val title = TextView(this).apply {
-            text = "Image Multiplier v12"
+            text = "Image Multiplier v13"
             textSize = 26f
             setTextColor(Color.WHITE)
             setGravity(Gravity.CENTER)
@@ -1203,9 +1203,7 @@ class MainActivity : Activity() {
                 resultBitmap = biased
                 previewResult.setImageBitmap(biased)
                 progressBar.visibility = View.GONE
-                val biasStr = if (bias != 1.0f && bmp1 != null) " bias=$bias" else ""
-                val divStr = if (hadDivZero) " [div/0: used img1]" else ""
-                statusText.text = "Done ${w}x${h} ${elapsed}s$biasStr$divStr $dbg"
+                Toast.makeText(this@MainActivity, dbg, Toast.LENGTH_LONG).show()
                 isProcessing = false
                 updateButtons()
             }
