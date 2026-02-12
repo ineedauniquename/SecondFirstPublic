@@ -62,17 +62,21 @@ class MainActivity : Activity() {
         val btnGreen = makeColorButton("G", Color.parseColor("#44CC44"))
         val btnBlue = makeColorButton("B", Color.parseColor("#4488FF"))
         val btnClear = Button(this).apply {
-            text = "CLEAR"
+            text = "CLR"
             setTextColor(Color.WHITE)
             setBackgroundColor(Color.parseColor("#555555"))
-            setPadding(dp(16), dp(4), dp(16), dp(4))
+            setPadding(dp(12), dp(4), dp(12), dp(4))
+            minWidth = 0
+            minimumWidth = 0
             setOnClickListener { paintView.clear() }
         }
         val btnFullScreen = Button(this).apply {
-            text = "FULL"
+            text = "VIEW"
             setTextColor(Color.WHITE)
             setBackgroundColor(Color.parseColor("#446688"))
-            setPadding(dp(16), dp(4), dp(16), dp(4))
+            setPadding(dp(12), dp(4), dp(12), dp(4))
+            minWidth = 0
+            minimumWidth = 0
             setOnClickListener { enterFullScreen() }
         }
 
