@@ -82,7 +82,7 @@ class MainActivity : Activity() {
         }
 
         val title = TextView(this).apply {
-            text = "Image Multiplier"
+            text = "Image Multiplier v7"
             textSize = 26f
             setTextColor(Color.WHITE)
             setGravity(Gravity.CENTER)
